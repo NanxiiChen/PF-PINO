@@ -98,6 +98,11 @@ class FNO1d(eqx.Module):
     #         x = self.__call__(x)
     #         preds.append(x)
     #     return jnp.stack(preds, axis=0)
+
+    @eqx.filter_jit
+    def forward(self, x):
+        return self.__call__(x)
+
     
     @eqx.filter_jit
     def auto_reg(self, u0, Lp, meshes, dt, steps):
@@ -112,7 +117,7 @@ class FNO1d(eqx.Module):
             inputs = jnp.concatenate([u, Lp_channel, 
                                       meshes, t_channel], 
                                      axis=0)  # [C+2, S]
-            u = self.__call__(inputs)  # [C, S]
+            u = self.forward(inputs)  # [C, S]
             preds.append(u)
         return jnp.stack(preds, axis=0)  # [T, C, S]
             

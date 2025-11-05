@@ -11,7 +11,10 @@ import math
 import fenics as fn
 import numpy as np
 
-save_dir = './results-1d-test'
+# mode = 'train_valid'
+mode = 'test'
+
+save_dir = './data/train_valid' if mode == 'train_valid' else './data/test'
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
@@ -54,11 +57,15 @@ alphap = 9.62e-5
 omegap = 1.663e7
 DD = 8.5e-10
 AA = 5.35e7
-# Lp parameter values for the train and validation sets
-# Lp_values = [1.0e-9, 5.0e-9, 1.0e-8, 5.0e-8, 1.0e-7, 1.0e-6, 1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0e0]
 
-# Lower number of Lp values for testing
-Lp_values = [2.5e-9, 2.5e-8, 2.5e-7, 2.5e-6, 5.0e-3, 5.0e-1]
+if mode == 'train_valid':
+    # Lp parameter values for the train and validation sets
+    Lp_values = [1.0e-9, 5.0e-9, 1.0e-8, 5.0e-8, 1.0e-7, 1.0e-6, 1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0e0]
+elif mode == 'test':
+    # Lower number of Lp values for testing
+    Lp_values = [2.5e-9, 2.5e-8, 2.5e-7, 2.5e-6, 5.0e-3, 5.0e-1]
+else:
+    raise ValueError("Invalid mode. Choose 'train_valid' or 'test'.")
 cse = 1.
 cle = 5100/1.43e5
 
@@ -163,7 +170,7 @@ for lp_idx, Lp in enumerate(Lp_values):
     print(f"Completed simulation for Lp = {Lp}")
 
 # Save the complete results array
-np.save(f'{save_dir}/complete_results.npy', results)
+np.save(f'{save_dir}/solutions.npy', results)
 np.save(f'{save_dir}/Lp_values.npy', Lp_values)
 np.save(f'{save_dir}/times.npy', times)
 print(f'Results saved with shape: {results.shape}')
