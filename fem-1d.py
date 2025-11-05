@@ -60,10 +60,10 @@ AA = 5.35e7
 
 if mode == 'train_valid':
     # Lp parameter values for the train and validation sets
-    Lp_values = [1.0e-9, 1.0e-8, 5.0e-8, 5.0e-7, 5.0e-6, 1.0e-3, 1.0e0]
+    Lp_values = [1.0e-9, 1.0e-8, 5.0e-8, 1.0e-7, 5.0e-7, 1e-4, 1.0e0]
 elif mode == 'test':
     # Lower number of Lp values for testing
-    Lp_values = [2.5e-9, 2.5e-8, 2.5e-7, 2.5e-6, 5.0e-3, 5.0e-1]
+    Lp_values = [5.0e-9, 2.5e-8, 5.0e-7, 1.0e-6, 1.0e-3, 5.0e-1]
 else:
     raise ValueError("Invalid mode. Choose 'train_valid' or 'test'.")
 cse = 1.

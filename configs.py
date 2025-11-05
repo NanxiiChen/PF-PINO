@@ -6,7 +6,7 @@ class Configs:
     
     in_channels = 5 # phi, c, lp, mesh, time
     out_channels = 2 # phi, c
-    modes = 8
+    modes = 16
     width = 64 # channel width in spectral conv layer
     depth = 4 # number of spectral conv layers
     activation = "gelu"
@@ -20,7 +20,7 @@ class Configs:
     epochs = 5000
     save_every = 100
     test_every = 500
-    physical_residual = True
+    physical_residual = False
     
     save_dir = "./runs/PINO/" if physical_residual else "./runs/FNO/"
     data_dir = "./data/train_valid/"

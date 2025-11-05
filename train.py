@@ -69,7 +69,7 @@ def main():
     dx = meshes[1] - meshes[0]
     steps = Ys.shape[1]
     train_x_full, valid_x_full, train_y_full, valid_y_full = train_test_split(
-        Xs, Ys, test_size=0.3, random_state=0
+        Xs, Ys, test_size=0.25, random_state=0
     )
     jnp.savez(os.path.join(configs.data_dir, "dataset_split.npz"),
              train_x=train_x_full,
