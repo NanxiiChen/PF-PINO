@@ -1,4 +1,5 @@
 import os
+from functools import partial
 
 import equinox as eqx
 import jax
@@ -68,7 +69,7 @@ def main():
     dx = meshes[1] - meshes[0]
     steps = Ys.shape[1]
     train_x_full, valid_x_full, train_y_full, valid_y_full = train_test_split(
-        Xs, Ys, test_size=0.2, random_state=0
+        Xs, Ys, test_size=0.3, random_state=0
     )
     jnp.savez(os.path.join(configs.data_dir, "dataset_split.npz"),
              train_x=train_x_full,
@@ -87,7 +88,7 @@ def main():
     )
     
     losses = Losses()
-    loss_fn = losses.pi_loss
+    loss_fn = losses.pi_loss if configs.physical_residual else losses.mse_loss
 
     schedualer = optax.exponential_decay(
         init_value=configs.learning_rate,
@@ -108,7 +109,10 @@ def main():
         os.makedirs(savedir)
     
     with open(os.path.join(savedir, "logs.csv"), "w") as f:
-        f.write("Epoch,TrainLoss,ValidLoss\n")
+        f.write("Epoch,TrainLoss,ValidLoss,ACLoss,CHLoss\n")
+        
+    with open(os.path.join(savedir, "test_logs.csv"), "w") as f:
+        f.write("Epoch,TestMSE\n")
     
     for epoch in range(configs.epochs):
         shuffle_key, train_key, subkey = jax.random.split(shuffle_key, 3)
@@ -117,14 +121,23 @@ def main():
         train_loss_epoch = 0.0
         val_loss_epoch = 0.0
         for train_batch_x, train_batch_y in train_loader:
-            fno, opt_state, weighted_loss, loss_components, weight_components, aux_vars = train_step_pi(
-                fno, loss_fn,
-                opt_state, optimizer, 
-                train_batch_x, train_batch_y,
-                Lps=configs.Lp_from_Lpc(train_batch_x[:, 2, 0]),
-                dx=dx, dt=dt, configs=configs
-            )
-            train_loss_epoch += loss_components[0].item() * train_batch_x.shape[0]
+            if configs.physical_residual:
+                fno, opt_state, weighted_loss, loss_components, weight_components, aux_vars = train_step_pi(
+                    fno, loss_fn,
+                    opt_state, optimizer, 
+                    train_batch_x, train_batch_y,
+                    Lps=configs.Lp_from_Lpc(train_batch_x[:, 2, 0]),
+                    dx=dx, dt=dt, configs=configs
+                )
+                train_loss_epoch += loss_components[0].item() * train_batch_x.shape[0]
+            else:
+                fno, opt_state, loss = train_step(
+                    fno, loss_fn,
+                    opt_state, optimizer,
+                    train_batch_x, train_batch_y,
+                    meshes=meshes,
+                )
+                train_loss_epoch += loss.item() * train_batch_x.shape[0]
         train_loss_epoch /= train_x_full.shape[0]
         train_loss_history.append(train_loss_epoch)
         
@@ -134,9 +147,15 @@ def main():
         val_loss_epoch /= valid_x_full.shape[0]
         valid_loss_history.append(val_loss_epoch)
         
-        with open(os.path.join(savedir, "logs.csv"), "a") as f:
-            f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch}\n")
-            
+        if configs.physical_residual:
+            ac_loss = loss_components[1].item()
+            ch_loss = loss_components[2].item()
+            with open(os.path.join(savedir, "logs.csv"), "a") as f:
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss},{ch_loss}\n")
+        else:
+            with open(os.path.join(savedir, "logs.csv"), "a") as f:
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},0,0\n")
+
         if epoch % configs.save_every == 0 or epoch == configs.epochs - 1:
             print(
                 f"Epoch {epoch}: "
@@ -148,5 +167,33 @@ def main():
                 os.path.join(savedir, f"epoch_{epoch}.eqx"),
                 fno)
             
+        if epoch % configs.test_every == 0 and epoch != 0:
+            test_solutions = jnp.load(os.path.join(configs.test_data_dir, "solutions.npy"))[:, :, :, ::-1]
+            test_lp_values = jnp.load(os.path.join(configs.test_data_dir, "Lp_values.npy")).reshape(-1, 1)
+            test_meshes = jnp.load(os.path.join(configs.test_data_dir, "mesh_points.npy")).reshape(-1)[::-1]
+            test_times = jnp.load(os.path.join(configs.test_data_dir, "times.npy"))
+            # test_lp_values = -jnp.log10(test_lp_values) -5
+            test_lp_values = configs.Lpc(test_lp_values)
+            test_times = test_times / configs.Tc
+            test_meshes = test_meshes / configs.Lc
+            dt = test_times[1] - test_times[0]
+            
+            x_test = test_solutions[:, 0, :, :]
+            y_test = test_solutions[:, 1:, :, :]
+            auto_reg_fn = partial(
+                fno.auto_reg,
+                meshes=test_meshes,
+                dt=jnp.array(dt),
+                steps=test_times.shape[0]-1,
+            )
+            y_test_pred = jax.vmap(auto_reg_fn,
+                                in_axes=(0, 0)
+                                )(x_test, test_lp_values)
+            
+            test_mse = jnp.mean((y_test_pred - y_test) ** 2)
+            print(f"Test MSE at epoch {epoch}: {test_mse:.3e}")
+            with open(os.path.join(savedir, "test_logs.csv"), "a") as f:
+                f.write(f"{epoch},{test_mse}\n")
+
 if __name__ == "__main__":
     main()

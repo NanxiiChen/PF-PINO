@@ -6,21 +6,23 @@ class Configs:
     
     in_channels = 5 # phi, c, lp, mesh, time
     out_channels = 2 # phi, c
-    modes = 32
-    width = 128 # channel width in spectral conv layer
+    modes = 8
+    width = 64 # channel width in spectral conv layer
     depth = 4 # number of spectral conv layers
     activation = "gelu"
     
     learning_rate = 1e-3
-    decay_every = 100
+    decay_every = 500
     decay_rate = 0.95
     end_value = 1e-5
     
-    batch_size = 64
+    batch_size = 128
     epochs = 5000
     save_every = 100
+    test_every = 500
+    physical_residual = True
     
-    save_dir = "./runs/PINO/"
+    save_dir = "./runs/PINO/" if physical_residual else "./runs/FNO/"
     data_dir = "./data/train_valid/"
     test_data_dir = "./data/test/"
     
@@ -45,7 +47,6 @@ class Configs:
     MM = 7.94e-18
     DD = 8.5e-10
     AA = 5.35e7
-    LP = 2.0
     CSE = 1.0
     CLE = 5100 / 1.43e5
     

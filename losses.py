@@ -30,10 +30,10 @@ class FDM1D:
         """
         dudx = jnp.zeros_like(u)
         dudx = dudx.at[1:-1].set((u[2:] - u[:-2]) / (2 * dx))
-        # Forward difference at the first point
-        dudx = dudx.at[0].set((u[1] - u[0]) / dx)
-        # Backward difference at the last point
-        dudx = dudx.at[-1].set((u[-1] - u[-2]) / dx)
+        # # Forward difference at the first point
+        # dudx = dudx.at[0].set((u[1] - u[0]) / dx)
+        # # Backward difference at the last point
+        # dudx = dudx.at[-1].set((u[-1] - u[-2]) / dx)
         return dudx
     
     @staticmethod
@@ -51,10 +51,10 @@ class FDM1D:
         """
         d2udx2 = jnp.zeros_like(u)
         d2udx2 = d2udx2.at[1:-1].set((u[2:] - 2 * u[1:-1] + u[:-2]) / (dx ** 2))
-        # Second derivative at the first point using forward difference
-        d2udx2 = d2udx2.at[0].set((u[2] - 2 * u[1] + u[0]) / (dx ** 2))
-        # Second derivative at the last point using backward difference
-        d2udx2 = d2udx2.at[-1].set((u[-1] - 2 * u[-2] + u[-3]) / (dx ** 2))
+        # # Second derivative at the first point using forward difference
+        # d2udx2 = d2udx2.at[0].set((u[2] - 2 * u[1] + u[0]) / (dx ** 2))
+        # # Second derivative at the last point using backward difference
+        # d2udx2 = d2udx2.at[-1].set((u[-1] - 2 * u[-2] + u[-3]) / (dx ** 2))
         return d2udx2
 
 
@@ -172,7 +172,7 @@ class Losses:
                 + CH1 * (configs.CSE - configs.CLE) * lap_h_phi
             )
 
-            return residual
+            return residual / configs.CH_PRE_SCALE
 
         residuals = vmap(residual_fn, in_axes=(0, 0, None, None))(xs, Lps, dx, dt)
         loss = jnp.mean(jnp.square(residuals))
@@ -209,9 +209,7 @@ class Losses:
             aux_vars.update(aux_var)
             
         weights = cls.grad_norm_weights(grads)
-        # weights = weights.at[1].set(0.0)  # set AC loss weight to 0
-        # weights = weights.at[2].set(0.0)  # set AC loss weight to 0
-        
+    
         total_loss = jnp.sum(jnp.array(weights) * jnp.array(losses))
         return total_loss, (losses, weights, aux_vars)
             
@@ -228,39 +226,3 @@ class Losses:
         weights = jnp.clip(weights, eps, 1 / eps)
         return jax.lax.stop_gradient(weights)
         
-
-        
-
-
-    # TODO: total loss fn 
-    # TODO: grad_norm_weighting
-    # The following code snippet is copied from a legacy repo for reference
-
-    """
-    @partial(jit, static_argnums=(0, 4))
-    def loss_fn(self, params, batch, eps, pde_name):
-        losses, grads, aux_vars = self.compute_losses_and_grads(
-            params, batch, eps, pde_name
-        )
-
-        weights = self.grad_norm_weights(grads)
-        if not self.cfg.IRR:
-            weights = weights.at[-1].set(0.0)
-
-        return jnp.sum(weights * losses), (losses, weights, aux_vars)
-
-    @partial(jit, static_argnums=(0,))
-    def grad_norm_weights(self, grads: list, eps=1e-6):
-        def tree_norm(pytree):
-            squared_sum = sum(jnp.sum(x**2) for x in jax.tree_util.tree_leaves(pytree))
-            return jnp.sqrt(squared_sum)
-
-        grad_norms = jnp.array([tree_norm(grad) for grad in grads])
-
-        grad_norms = jnp.clip(grad_norms, eps, 1 / eps)
-        weights = jnp.mean(grad_norms) / (grad_norms + eps)
-        weights = jnp.nan_to_num(weights)
-        weights = jnp.clip(weights, eps, 1 / eps)
-        return jax.lax.stop_gradient(weights)
-    """
-    
