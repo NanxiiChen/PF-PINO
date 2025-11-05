@@ -187,6 +187,7 @@ class Losses:
                 dx: jnp.ndarray,
                 dt: jnp.ndarray,
                 configs: object,
+                pde_name: str = 'ac',
                 **kwargs) -> jnp.ndarray:
         # total_loss = mse_loss_value + ac_loss_value + ch_loss_value
         
@@ -209,6 +210,13 @@ class Losses:
             aux_vars.update(aux_var)
             
         weights = cls.grad_norm_weights(grads)
+        # Adjust weights based on the PDE being solved
+        if pde_name == 'ac':
+            weights = jnp.array([weights[0], weights[1], 0.0])
+        elif pde_name == 'ch':
+            weights = jnp.array([weights[0], 0.0, weights[2]])
+        else:
+            pass
     
         total_loss = jnp.sum(jnp.array(weights) * jnp.array(losses))
         return total_loss, (losses, weights, aux_vars)

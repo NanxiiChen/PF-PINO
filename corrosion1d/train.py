@@ -115,6 +115,8 @@ def main():
         f.write("Epoch,TestMSE\n")
     
     for epoch in range(configs.epochs):
+        # pde_name = "ac" if epoch % 100 < 50 else "ch"
+        pde_name = "both"
         shuffle_key, train_key, subkey = jax.random.split(shuffle_key, 3)
         train_loader = dataloader(train_key, train_x_full, train_y_full, batch_size=batch_size)
         valid_loader = dataloader(subkey, valid_x_full, valid_y_full, batch_size=batch_size)
@@ -127,7 +129,8 @@ def main():
                     opt_state, optimizer, 
                     train_batch_x, train_batch_y,
                     Lps=configs.Lp_from_Lpc(train_batch_x[:, 2, 0]),
-                    dx=dx, dt=dt, configs=configs
+                    dx=dx, dt=dt, configs=configs,
+                    pde_name=pde_name,
                 )
                 train_loss_epoch += loss_components[0].item() * train_batch_x.shape[0]
             else:
