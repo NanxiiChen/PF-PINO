@@ -170,7 +170,7 @@ def main():
                 os.path.join(savedir, f"epoch_{epoch}.eqx"),
                 fno)
             
-        if epoch % configs.test_every == 0 and epoch != 0:
+        if epoch % configs.test_every == 0 or epoch == configs.epochs - 1:
             test_solutions = jnp.load(os.path.join(configs.test_data_dir, "solutions.npy"))[:, :, :, ::-1]
             test_lp_values = jnp.load(os.path.join(configs.test_data_dir, "Lp_values.npy")).reshape(-1, 1)
             test_meshes = jnp.load(os.path.join(configs.test_data_dir, "mesh_points.npy")).reshape(-1)[::-1]

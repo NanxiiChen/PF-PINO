@@ -118,6 +118,8 @@ class Losses:
                 + AC2 * dg_dphi
                 - AC3 * lap_phi
             )
+            residual = residual.at[0].set(0.0)  # enforce boundary condition at the first point
+            residual = residual.at[-1].set(0.0)  # enforce boundary condition
             return residual / configs.AC_PRE_SCALE
 
         residuals = vmap(residual_fn, in_axes=(0, 0, None, None))(xs, Lps, dx, dt)
@@ -171,7 +173,8 @@ class Losses:
                 - CH1 * lap_c
                 + CH1 * (configs.CSE - configs.CLE) * lap_h_phi
             )
-
+            residual = residual.at[0].set(0.0)  # enforce boundary condition at the first point
+            residual = residual.at[-1].set(0.0)  # enforce boundary condition
             return residual / configs.CH_PRE_SCALE
 
         residuals = vmap(residual_fn, in_axes=(0, 0, None, None))(xs, Lps, dx, dt)
