@@ -20,7 +20,7 @@ class Configs:
     epochs = 5000
     save_every = 100
     test_every = 500
-    physical_residual = False
+    physical_residual = True
     
     save_dir = "./runs/PINO/" if physical_residual else "./runs/FNO/"
     data_dir = "./data/train_valid/"
