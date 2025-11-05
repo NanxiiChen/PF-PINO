@@ -70,8 +70,8 @@ class Losses:
         return jnp.mean(jnp.square(y_pred - ys)), {}
     
     @classmethod
-    def ac_loss(cls, xs: jnp.ndarray, 
-                preds: jnp.ndarray,
+    def ac_loss(cls, model: FNO1d,
+                xs: jnp.ndarray, 
                 Lps: jnp.ndarray,
                 dx: jnp.ndarray,
                 dt: jnp.ndarray,
@@ -81,9 +81,8 @@ class Losses:
         Allen-Cahn equation loss computation.
 
         Args:
-        
+            model (FNO1d): The neural network model.
             xs (jnp.ndarray): Input array,shape is [B, C+3, S]. B is the batch size, C is number of channels (variables), S is number of spatial points. The extra 3 channels are Lp constant channel, mesh channel, and time channel.
-            preds (jnp.ndarray): Predicted array, shape is [B, C, S].
             Lps (jnp.ndarray): Moblity parameter, shape is [B,] vector
             dx (jnp.ndarray): Spatial step size, shape is [1,], scalar
             dt (jnp.ndarray): Time step size, shape is [1,], scalar
@@ -94,10 +93,11 @@ class Losses:
         """
 
         @eqx.filter_jit
-        def residual_fn(x, pred, Lp, dx, dt):
+        def residual_fn(x, Lp, dx, dt):
             AC1 = 2 * configs.AA * Lp * configs.Tc
             AC2 = Lp * configs.OMEGA_PHI * configs.Tc
             AC3 = Lp * configs.ALPHA_PHI * configs.Tc / configs.Lc**2
+            pred = model.forward(x)
 
             phi0 = x[0, :]  # phase field variable at current time
             c0 = x[1, :]    # concentration variable at current time
@@ -120,13 +120,13 @@ class Losses:
             )
             return residual / configs.AC_PRE_SCALE
 
-        residuals = vmap(residual_fn, in_axes=(0, 0, 0, None, None))(xs, preds, Lps, dx, dt)
+        residuals = vmap(residual_fn, in_axes=(0, 0, None, None))(xs, Lps, dx, dt)
         loss = jnp.mean(jnp.square(residuals))
         return loss, {}
     
     @classmethod
-    def ch_loss(cls, xs: jnp.ndarray,
-                preds: jnp.ndarray,
+    def ch_loss(cls, model: FNO1d,
+                xs: jnp.ndarray,
                 Lps: jnp.ndarray,
                 dx: jnp.ndarray,
                 dt: jnp.ndarray,
@@ -136,8 +136,8 @@ class Losses:
         Cahn-Hilliard equation loss computation.
 
         Args:
+            model (FNO1d): The neural network model.
             xs (jnp.ndarray): Input array,shape is [B, C+3, S]. B is the batch size, C is number of channels (variables), S is number of spatial points. The extra 3 channels are Lp constant channel, mesh channel, and time channel.
-            preds (jnp.ndarray): Predicted array, shape is [B, C, S].
             Lps (jnp.ndarray): Moblity parameter, shape is [B,] vector
             dx (jnp.ndarray): Spatial step size, shape is [1,], scalar
             dt (jnp.ndarray): Time step size, shape is [1,], scalar
@@ -148,8 +148,9 @@ class Losses:
         """
 
         @eqx.filter_jit
-        def residual_fn(x, pred, Lp, dx, dt):
+        def residual_fn(x, Lp, dx, dt):
             CH1 = 2 * configs.AA * configs.MM * configs.Tc / configs.Lc**2
+            pred = model.forward(x)
 
             phi0 = x[0, :]  # phase field variable at current time
             c0 = x[1, :]    # concentration variable at current time
@@ -163,7 +164,7 @@ class Losses:
             lap_c = FDM1D.second_derivative(c, dx)
             lap_h_phi = 6 * (
                 phi * (1 - phi) * lap_phi 
-                + (1 - 2 * phi) * jnp.sum(nabla_phi**2)
+                + (1 - 2 * phi) * nabla_phi**2
             )
             residual = (
                 dc_dt
@@ -173,7 +174,7 @@ class Losses:
 
             return residual
 
-        residuals = vmap(residual_fn, in_axes=(0, 0, 0, None, None))(xs, preds, Lps, dx, dt)
+        residuals = vmap(residual_fn, in_axes=(0, 0, None, None))(xs, Lps, dx, dt)
         loss = jnp.mean(jnp.square(residuals))
         return loss, {}
     
@@ -182,13 +183,11 @@ class Losses:
     def pi_loss(cls, model: FNO1d,
                 xs: jnp.ndarray,
                 ys: jnp.ndarray,
-                preds: jnp.ndarray,
                 Lps: jnp.ndarray,
                 dx: jnp.ndarray,
                 dt: jnp.ndarray,
                 configs: object,
                 **kwargs) -> jnp.ndarray:
-        preds = vmap(model.forward)(xs)
         # total_loss = mse_loss_value + ac_loss_value + ch_loss_value
         
         loss_fns = [cls.mse_loss, cls.ac_loss, cls.ch_loss]
@@ -197,9 +196,9 @@ class Losses:
         aux_vars = {}
         for loss_fn in loss_fns:
             (loss, aux_var), grad = eqx.filter_value_and_grad(loss_fn, has_aux=True)(
-                xs=xs,
+                model,
+                xs,
                 ys=ys,
-                preds=preds,
                 Lps=Lps,
                 dx=dx,
                 dt=dt,
@@ -210,17 +209,21 @@ class Losses:
             aux_vars.update(aux_var)
             
         weights = cls.grad_norm_weights(grads)
+        # weights = weights.at[1].set(0.0)  # set AC loss weight to 0
+        # weights = weights.at[2].set(0.0)  # set AC loss weight to 0
+        
         total_loss = jnp.sum(jnp.array(weights) * jnp.array(losses))
         return total_loss, (losses, weights, aux_vars)
             
-            
-    def grad_norm_weights(self, grads: list, eps=1e-6):
+    @classmethod
+    def grad_norm_weights(cls, grads: list, eps=1e-6):
         def tree_norm(pytree):
             squared_sum = sum(jnp.sum(x**2) for x in jax.tree_util.tree_leaves(pytree))
             return jnp.sqrt(squared_sum)
         grad_norms = jnp.array([tree_norm(grad) for grad in grads])
         grad_norms = jnp.clip(grad_norms, eps, 1 / eps)
-        weights = jnp.mean(grad_norms) / (grad_norms + eps)
+        # weights = jnp.mean(grad_norms) / (grad_norms + eps)
+        weights = grad_norms[0] / (grad_norms + eps)
         weights = jnp.nan_to_num(weights)
         weights = jnp.clip(weights, eps, 1 / eps)
         return jax.lax.stop_gradient(weights)

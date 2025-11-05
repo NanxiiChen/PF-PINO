@@ -33,13 +33,26 @@ def dataloader(
         yield dataset_x[batch_indices, ..., ::down_scale], dataset_y[batch_indices, ..., ::down_scale]
 
 @eqx.filter_jit
-def train_step(model, loss_fn, state, optimizer, x, y, **kwargs):
-    (loss, *_), grad = eqx.filter_value_and_grad(
+def train_step(model, loss_fn, state, optimizer, xs, ys, **kwargs):
+    (loss, _), grad = eqx.filter_value_and_grad(
         loss_fn, has_aux=True
-    )(model, x, y, **kwargs)
+    )(model, xs, ys, **kwargs)
     updates, new_state = optimizer.update(grad, state, model)
     new_model = eqx.apply_updates(model, updates)
     return new_model, new_state, loss
+
+
+@eqx.filter_jit
+def train_step_pi(model, loss_fn, state, optimizer, 
+                  xs, ys, Lps, dx, dt, configs, **kwargs):
+    (weighted_loss, (loss_components, weight_components, aux_vars)), grad = eqx.filter_value_and_grad(
+        loss_fn, has_aux=True
+    )(model, xs, ys, Lps, dx, dt, configs, **kwargs)
+    updates, new_state = optimizer.update(grad, state, model)
+    new_model = eqx.apply_updates(model, updates)
+    return new_model, new_state, weighted_loss, loss_components, weight_components, aux_vars
+
+
 
 def main():
     # data = scipy.io.loadmat("burgers_data_R10.mat")
@@ -49,9 +62,10 @@ def main():
     configs = Configs()
     data = jnp.load(os.path.join(configs.data_dir, "dataset_1d_complete.npz"))
     Xs, Ys = data["Xs"], data["Ys"]
-    meshes = data["meshes"]
-    times = data["times"]
+    meshes = data["meshes"] # already normalized
+    times = data["times"] # already normalized
     dt = times[1] - times[0]
+    dx = meshes[1] - meshes[0]
     steps = Ys.shape[1]
     train_x_full, valid_x_full, train_y_full, valid_y_full = train_test_split(
         Xs, Ys, test_size=0.2, random_state=0
@@ -73,7 +87,7 @@ def main():
     )
     
     losses = Losses()
-    loss_fn = losses.mse_loss
+    loss_fn = losses.pi_loss
 
     schedualer = optax.exponential_decay(
         init_value=configs.learning_rate,
@@ -103,19 +117,19 @@ def main():
         train_loss_epoch = 0.0
         val_loss_epoch = 0.0
         for train_batch_x, train_batch_y in train_loader:
-            fno, opt_state, loss = train_step(
+            fno, opt_state, weighted_loss, loss_components, weight_components, aux_vars = train_step_pi(
                 fno, loss_fn,
                 opt_state, optimizer, 
                 train_batch_x, train_batch_y,
-                meshes=meshes, steps=steps, dt=dt
+                Lps=configs.Lp_from_Lpc(train_batch_x[:, 2, 0]),
+                dx=dx, dt=dt, configs=configs
             )
-            train_loss_epoch += loss.item() * train_batch_x.shape[0]
+            train_loss_epoch += loss_components[0].item() * train_batch_x.shape[0]
         train_loss_epoch /= train_x_full.shape[0]
         train_loss_history.append(train_loss_epoch)
         
         for val_batch_x, val_batch_y in valid_loader:
-            val_loss, _ = losses.mse_loss(fno, val_batch_x, val_batch_y, 
-                               meshes=meshes, steps=steps, dt=dt)
+            val_loss, _ = losses.mse_loss(fno, val_batch_x, val_batch_y, meshes=meshes,)
             val_loss_epoch += val_loss.item() * val_batch_x.shape[0]
         val_loss_epoch /= valid_x_full.shape[0]
         valid_loss_history.append(val_loss_epoch)
