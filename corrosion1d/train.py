@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 
 from configs import Configs
 from losses import Losses
-from model import FNO1d
+from model1d import get_model1d
 
 
 def dataloader(
@@ -67,7 +67,6 @@ def main():
     times = data["times"] # already normalized
     dt = times[1] - times[0]
     dx = meshes[1] - meshes[0]
-    steps = Ys.shape[1]
     train_x_full, valid_x_full, train_y_full, valid_y_full = train_test_split(
         Xs, Ys, test_size=0.25, random_state=0
     )
@@ -77,14 +76,27 @@ def main():
              valid_x=valid_x_full,
              valid_y=valid_y_full)
     
-    fno = FNO1d(
+    # Create model using factory function
+    model_kwargs = {
+        'modes': configs.modes,
+        'width': configs.width,
+        'depth': configs.depth,
+        'activation': getattr(jax.nn, configs.activation),
+        'key': jax.random.PRNGKey(0),
+    }
+    
+    # Add VAE-specific parameters if needed
+    if configs.model_type == 'vae':
+        model_kwargs.update({
+            'latent_dim': configs.latent_dim,
+            'output_size': configs.output_size,
+        })
+    
+    model = get_model1d(
+        configs.model_type,
         configs.in_channels,
         configs.out_channels,
-        configs.modes,
-        configs.width,
-        configs.depth,
-        activation=getattr(jax.nn, configs.activation),
-        key=jax.random.PRNGKey(0),
+        **model_kwargs
     )
     
     losses = Losses()
@@ -97,7 +109,7 @@ def main():
         end_value=configs.end_value,
     )
     optimizer = optax.adam(schedualer)
-    opt_state = optimizer.init(eqx.filter(fno, eqx.is_array))
+    opt_state = optimizer.init(eqx.filter(model, eqx.is_array))
 
 
     batch_size = configs.batch_size
@@ -124,8 +136,8 @@ def main():
         val_loss_epoch = 0.0
         for train_batch_x, train_batch_y in train_loader:
             if configs.physical_residual:
-                fno, opt_state, weighted_loss, loss_components, weight_components, aux_vars = train_step_pi(
-                    fno, loss_fn,
+                model, opt_state, weighted_loss, loss_components, weight_components, aux_vars = train_step_pi(
+                    model, loss_fn,
                     opt_state, optimizer, 
                     train_batch_x, train_batch_y,
                     Lps=configs.Lp_from_Lpc(train_batch_x[:, 2, 0]),
@@ -134,8 +146,8 @@ def main():
                 )
                 train_loss_epoch += loss_components[0].item() * train_batch_x.shape[0]
             else:
-                fno, opt_state, loss = train_step(
-                    fno, loss_fn,
+                model, opt_state, loss = train_step(
+                    model, loss_fn,
                     opt_state, optimizer,
                     train_batch_x, train_batch_y,
                     meshes=meshes,
@@ -145,7 +157,7 @@ def main():
         train_loss_history.append(train_loss_epoch)
         
         for val_batch_x, val_batch_y in valid_loader:
-            val_loss, _ = losses.mse_loss(fno, val_batch_x, val_batch_y, meshes=meshes,)
+            val_loss, _ = losses.mse_loss(model, val_batch_x, val_batch_y, meshes=meshes,)
             val_loss_epoch += val_loss.item() * val_batch_x.shape[0]
         val_loss_epoch /= valid_x_full.shape[0]
         valid_loss_history.append(val_loss_epoch)
@@ -168,7 +180,7 @@ def main():
             
             eqx.tree_serialise_leaves(
                 os.path.join(savedir, f"epoch_{epoch}.eqx"),
-                fno)
+                model)
             
         if epoch % configs.test_every == 0 or epoch == configs.epochs - 1:
             test_solutions = jnp.load(os.path.join(configs.test_data_dir, "solutions.npy"))[:, :, :, ::-1]
@@ -184,7 +196,7 @@ def main():
             x_test = test_solutions[:, 0, :, :]
             y_test = test_solutions[:, 1:, :, :]
             auto_reg_fn = partial(
-                fno.auto_reg,
+                model.auto_reg,
                 meshes=test_meshes,
                 dt=jnp.array(dt),
                 steps=test_times.shape[0]-1,

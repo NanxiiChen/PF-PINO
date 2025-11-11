@@ -7,7 +7,7 @@ from jax import vmap
 import optax
 import scipy
 
-from model import FNO1d
+from model1d.base_model1d import AutoRegressiveModel1d
 
 
 class FDM1D:
@@ -62,7 +62,7 @@ class Losses:
 
     @classmethod
     @eqx.filter_jit
-    def mse_loss(cls, model: FNO1d, 
+    def mse_loss(cls, model: AutoRegressiveModel1d, 
                  xs: jnp.ndarray, 
                  ys: jnp.ndarray, 
                  **kwargs) -> jnp.ndarray:
@@ -70,7 +70,7 @@ class Losses:
         return jnp.mean(jnp.square(y_pred - ys)), {}
     
     @classmethod
-    def ac_loss(cls, model: FNO1d,
+    def ac_loss(cls, model: AutoRegressiveModel1d,
                 xs: jnp.ndarray, 
                 Lps: jnp.ndarray,
                 dx: jnp.ndarray,
@@ -81,7 +81,7 @@ class Losses:
         Allen-Cahn equation loss computation.
 
         Args:
-            model (FNO1d): The neural network model.
+            model (AutoRegressiveModel1d): The neural network model.
             xs (jnp.ndarray): Input array,shape is [B, C+3, S]. B is the batch size, C is number of channels (variables), S is number of spatial points. The extra 3 channels are Lp constant channel, mesh channel, and time channel.
             Lps (jnp.ndarray): Moblity parameter, shape is [B,] vector
             dx (jnp.ndarray): Spatial step size, shape is [1,], scalar
@@ -127,7 +127,7 @@ class Losses:
         return loss, {}
     
     @classmethod
-    def ch_loss(cls, model: FNO1d,
+    def ch_loss(cls, model: AutoRegressiveModel1d,
                 xs: jnp.ndarray,
                 Lps: jnp.ndarray,
                 dx: jnp.ndarray,
@@ -138,7 +138,7 @@ class Losses:
         Cahn-Hilliard equation loss computation.
 
         Args:
-            model (FNO1d): The neural network model.
+            model (AutoRegressiveModel1d): The neural network model.
             xs (jnp.ndarray): Input array,shape is [B, C+3, S]. B is the batch size, C is number of channels (variables), S is number of spatial points. The extra 3 channels are Lp constant channel, mesh channel, and time channel.
             Lps (jnp.ndarray): Moblity parameter, shape is [B,] vector
             dx (jnp.ndarray): Spatial step size, shape is [1,], scalar
@@ -183,7 +183,7 @@ class Losses:
     
     @classmethod
     @eqx.filter_jit
-    def pi_loss(cls, model: FNO1d,
+    def pi_loss(cls, model: AutoRegressiveModel1d,
                 xs: jnp.ndarray,
                 ys: jnp.ndarray,
                 Lps: jnp.ndarray,

@@ -4,30 +4,38 @@ import jax.numpy as jnp
 @dataclass(frozen=True)
 class Configs:
     
+    # Model architecture settings
+    model_type = "unet"  # Options: 'fno', 'fcn', 'unet', 'vae'
+    
     in_channels = 5 # phi, c, lp, mesh, time
     out_channels = 2 # phi, c
-    modes = 16
+    modes = 8
     width = 64 # channel width in spectral conv layer
     depth = 4 # number of spectral conv layers
     activation = "gelu"
+    
+    # VAE specific parameters (only used when model_type == 'vae')
+    latent_dim = 8
+    output_size = 101
     
     learning_rate = 1e-3
     decay_every = 500
     decay_rate = 0.95
     end_value = 1e-5
     
-    batch_size = 128
-    epochs = 5000
+    batch_size = 32
+    epochs = 10000
     save_every = 100
     test_every = 500
-    physical_residual = True
+    physical_residual = False
     
-    save_dir = "./runs/PINO/" if physical_residual else "./runs/FNO/"
+    save_dir = f"./runs/{model_type.upper()}-PI/" \
+        if physical_residual else f"./runs/{model_type.upper()}/"
     data_dir = "./data/train_valid/"
     test_data_dir = "./data/test/"
     
     Lc = 1e-4 # xc = x / Lc
-    Tc = 100.0 # tc = t / Tc
+    Tc = 1.0 # tc = t / Tc
     # Lpc = lambda lp: -jnp.log10(lp) - 5  # lpc = -log10(lp) - 5
     
     @staticmethod

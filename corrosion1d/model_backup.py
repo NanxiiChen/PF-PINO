@@ -92,17 +92,9 @@ class FNO1d(eqx.Module):
         x = self.projection(x)
         return x
     
-    # def auto_reg(self, x, steps):
-    #     preds = []
-    #     for _ in range(steps):
-    #         x = self.__call__(x)
-    #         preds.append(x)
-    #     return jnp.stack(preds, axis=0)
-
     @eqx.filter_jit
     def forward(self, x):
         return self.__call__(x)
-
     
     @eqx.filter_jit
     def auto_reg(self, u0, Lp, meshes, dt, steps):
@@ -111,8 +103,7 @@ class FNO1d(eqx.Module):
         preds = []
         u = u0 # vmap outside the function, so u0 shape is [C, S] without B
         for step in range(steps):
-            tic = step * dt
-            t_channel = jnp.full_like(meshes, tic)
+            t_channel = jnp.full_like(meshes, dt)
             Lp_channel = jnp.full_like(meshes, Lp)
             inputs = jnp.concatenate([u, Lp_channel, 
                                       meshes, t_channel], 
