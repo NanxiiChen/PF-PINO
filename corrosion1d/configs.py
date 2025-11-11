@@ -5,7 +5,7 @@ import jax.numpy as jnp
 class Configs:
     
     # Model architecture settings
-    model_type = "unet"  # Options: 'fno', 'fcn', 'unet'
+    model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
     
     in_channels = 5 # phi, c, lp, mesh, time
     out_channels = 2 # phi, c
@@ -24,7 +24,7 @@ class Configs:
     epochs = 10000
     save_every = 100
     test_every = 500
-    physical_residual = False
+    physical_residual = True
     
     save_dir = f"./runs/{model_type.upper()}-PI/" \
         if physical_residual else f"./runs/{model_type.upper()}/"
