@@ -30,10 +30,10 @@ class FDM1D:
         """
         dudx = jnp.zeros_like(u)
         dudx = dudx.at[1:-1].set((u[2:] - u[:-2]) / (2 * dx))
-        # # Forward difference at the first point
-        # dudx = dudx.at[0].set((u[1] - u[0]) / dx)
-        # # Backward difference at the last point
-        # dudx = dudx.at[-1].set((u[-1] - u[-2]) / dx)
+        # Forward difference at the first point
+        dudx = dudx.at[0].set((u[1] - u[0]) / dx)
+        # Backward difference at the last point
+        dudx = dudx.at[-1].set((u[-1] - u[-2]) / dx)
         return dudx
     
     @staticmethod
@@ -51,10 +51,10 @@ class FDM1D:
         """
         d2udx2 = jnp.zeros_like(u)
         d2udx2 = d2udx2.at[1:-1].set((u[2:] - 2 * u[1:-1] + u[:-2]) / (dx ** 2))
-        # # Second derivative at the first point using forward difference
-        # d2udx2 = d2udx2.at[0].set((u[2] - 2 * u[1] + u[0]) / (dx ** 2))
-        # # Second derivative at the last point using backward difference
-        # d2udx2 = d2udx2.at[-1].set((u[-1] - 2 * u[-2] + u[-3]) / (dx ** 2))
+        # Second derivative at the first point using forward difference
+        d2udx2 = d2udx2.at[0].set((u[2] - 2 * u[1] + u[0]) / (dx ** 2))
+        # Second derivative at the last point using backward difference
+        d2udx2 = d2udx2.at[-1].set((u[-1] - 2 * u[-2] + u[-3]) / (dx ** 2))
         return d2udx2
 
 
@@ -118,8 +118,8 @@ class Losses:
                 + AC2 * dg_dphi
                 - AC3 * lap_phi
             )
-            residual = residual.at[0].set(0.0)  # enforce boundary condition at the first point
-            residual = residual.at[-1].set(0.0)  # enforce boundary condition
+            # residual = residual.at[0].set(0.0)  # enforce boundary condition at the first point
+            # residual = residual.at[-1].set(0.0)  # enforce boundary condition
             return residual / configs.AC_PRE_SCALE
 
         residuals = vmap(residual_fn, in_axes=(0, 0, None, None))(xs, Lps, dx, dt)

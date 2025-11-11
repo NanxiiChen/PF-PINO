@@ -5,25 +5,22 @@ import jax.numpy as jnp
 class Configs:
     
     # Model architecture settings
-    model_type = "unet"  # Options: 'fno', 'fcn', 'unet', 'vae'
+    model_type = "unet"  # Options: 'fno', 'fcn', 'unet'
     
     in_channels = 5 # phi, c, lp, mesh, time
     out_channels = 2 # phi, c
     modes = 8
     width = 64 # channel width in spectral conv layer
-    depth = 4 # number of spectral conv layers
+    depth = 4
     activation = "gelu"
-    
-    # VAE specific parameters (only used when model_type == 'vae')
-    latent_dim = 8
-    output_size = 101
+
     
     learning_rate = 1e-3
     decay_every = 500
     decay_rate = 0.95
     end_value = 1e-5
     
-    batch_size = 32
+    batch_size = 128 if model_type != "unet" else 32
     epochs = 10000
     save_every = 100
     test_every = 500
