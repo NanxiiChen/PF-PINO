@@ -127,7 +127,7 @@ def main():
         f.write("Epoch,TestMSE\n")
     
     for epoch in range(configs.epochs):
-        # pde_name = "ac" if epoch % 100 < 50 else "ch"
+        # pde_name = "ac" if epoch % 1000 < 500 else "ch"
         pde_name = "both"
         shuffle_key, train_key, subkey = jax.random.split(shuffle_key, 3)
         train_loader = dataloader(train_key, train_x_full, train_y_full, batch_size=batch_size)

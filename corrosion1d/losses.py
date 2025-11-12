@@ -190,7 +190,7 @@ class Losses:
                 dx: jnp.ndarray,
                 dt: jnp.ndarray,
                 configs: object,
-                pde_name: str = 'ac',
+                pde_name: str = 'both',
                 **kwargs) -> jnp.ndarray:
         # total_loss = mse_loss_value + ac_loss_value + ch_loss_value
         
