@@ -3,6 +3,9 @@ runs/
 __pycache__/
 *.py[codz]
 *$py.class
+._.DS_Store
+.DS_Store
+helvetica/
 
 # C extensions
 *.so
