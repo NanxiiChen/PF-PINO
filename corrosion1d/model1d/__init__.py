@@ -1,6 +1,3 @@
-from .fno1d import FNO1d
-from .fcn1d import FCN1d
-from .unet1d import UNet1d
 import jax
 
 def get_model1d(model_type, in_channels, out_channels, **kwargs):
@@ -19,6 +16,7 @@ def get_model1d(model_type, in_channels, out_channels, **kwargs):
     key = kwargs.pop('key', jax.random.PRNGKey(0))
     
     if model_type.lower() == 'fno':
+        from .fno1d import FNO1d
         # FNO model parameters
         modes = kwargs.get('modes', 16)
         width = kwargs.get('width', 64)
@@ -36,6 +34,7 @@ def get_model1d(model_type, in_channels, out_channels, **kwargs):
         )
         
     elif model_type.lower() == 'fcn':
+        from .fcn1d import FCN1d
         # FCN model parameters
         width = kwargs.get('width', 128)
         depth = kwargs.get('depth', 4)
@@ -51,6 +50,7 @@ def get_model1d(model_type, in_channels, out_channels, **kwargs):
         )
         
     elif model_type.lower() == 'unet':
+        from .unet1d import UNet1d
         # UNet model parameters
         width = kwargs.get('width', 64)
         depth = kwargs.get('depth', 3)
@@ -71,4 +71,4 @@ def get_model1d(model_type, in_channels, out_channels, **kwargs):
                         f"Supported types: 'fno', 'fcn', 'unet'")
 
 # Export all model classes and factory function
-__all__ = ['FNO1d', 'FCN1d', 'UNet1d', 'get_model1d']
+__all__ = ['get_model1d']
