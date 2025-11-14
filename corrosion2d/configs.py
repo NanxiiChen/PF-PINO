@@ -22,7 +22,7 @@ class Configs:
     decay_rate = 0.95
     end_value = 1e-5
 
-    batch_size = 8 if model_type != "unet" else 32
+    batch_size = 64 if model_type != "unet" else 32
     epochs = 10000
     save_every = 100
     test_every = 500
