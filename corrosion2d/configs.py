@@ -18,14 +18,14 @@ class Configs:
 
 
     learning_rate = 1e-3
-    decay_every = 500
+    decay_every = 100
     decay_rate = 0.95
     end_value = 1e-5
 
     batch_size = 64 if model_type != "unet" else 32
     epochs = 10000
-    save_every = 100
-    test_every = 500
+    save_every = 20
+    test_every = 20
     physical_residual = False
 
     save_dir = f"./corrosion2d/runs/{model_type.upper()}-PI/" \

@@ -109,5 +109,5 @@ class FNO2d(AutoRegressiveModel2d):
         for block in self.fno_blocks:
             x = block(x)
         x = self.projection(x)
-        return x
+        return jax.nn.sigmoid(x)
                  

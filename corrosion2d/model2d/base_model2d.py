@@ -12,8 +12,7 @@ class AutoRegressiveModel2d(eqx.Module):
     
     @eqx.filter_jit
     def auto_reg(self, u0, meshes, dt, steps):
-        # meshes: [Sx, Sy]
-        meshes = meshes[None, :]  # [2, Sx, Sy]
+        # meshes: [2, Sx, Sy]
         preds = []
         u = u0 # vmap outside the function, so u0 shape is [C, Sx, Sy] without B
         for step in range(steps):

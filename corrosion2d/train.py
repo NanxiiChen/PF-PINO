@@ -124,14 +124,14 @@ def main():
                     model, loss_fn,
                     opt_state, optimizer,
                     train_batch_x, train_batch_y,
-                    meshes=meshes,
+                    # meshes=meshes,
                 )
                 train_loss_epoch += loss.item() * train_batch_x.shape[0]
         train_loss_epoch /= train_x_full.shape[0]
         train_loss_history.append(train_loss_epoch)
         
         for val_batch_x, val_batch_y in valid_loader:
-            val_loss, _ = losses.mse_loss(model, val_batch_x, val_batch_y, meshes=meshes,)
+            val_loss, _ = losses.mse_loss(model, val_batch_x, val_batch_y,)
             val_loss_epoch += val_loss.item() * val_batch_x.shape[0]
         val_loss_epoch /= valid_x_full.shape[0]
         valid_loss_history.append(val_loss_epoch)
@@ -157,5 +157,32 @@ def main():
                 os.path.join(savedir, f"epoch_{epoch}.eqx"),
                 model)
             
+
+        if epoch % configs.test_every == 0 or epoch == configs.epochs - 1:
+            test_solutions = jnp.load(os.path.join(configs.test_data_dir, "solutions_grid_initials.npy"))
+            test_meshes = jnp.load(os.path.join(configs.test_data_dir, "mesh_grid_coords.npy"))
+            test_meshes = jnp.transpose(test_meshes, (2, 0, 1))  # (samples, 2, nx, ny)
+            test_times = jnp.load(os.path.join(configs.test_data_dir, "times.npy"))
+
+            test_times = test_times / configs.Tc
+            test_meshes = test_meshes / configs.Lc
+            dt = test_times[1] - test_times[0]
+            x_test = test_solutions[:, 0, :, :, :] # (samples, channel, nx, ny)
+            steps = 1
+            y_test = test_solutions[:, 1:steps+1, :, :, :] # (samples, channel, nx, ny)
+            auto_reg_fn = partial(
+                model.auto_reg,
+                meshes=test_meshes,
+                dt=dt,
+                steps=steps,
+            )
+            y_test_pred = jax.vmap(auto_reg_fn)(x_test)
+            test_mse = jnp.mean((y_test_pred - y_test) ** 2)
+            print(f"Test MSE at epoch {epoch}: {test_mse:.3e}")
+            with open(os.path.join(savedir, "test_logs.csv"), "a") as f:
+                f.write(f"{epoch},{test_mse:.6e}\n")
+
+
+
 if __name__ == "__main__":
     main()
