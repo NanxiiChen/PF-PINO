@@ -14,7 +14,8 @@ import numpy as np
 mode = 'train_valid'
 # mode = 'test'
 
-save_dir = './data/train_valid' if mode == 'train_valid' else './data/test'
+save_dir = './corrosion1d/data/train_valid' if mode == 'train_valid' else './corrosion1d/data/test'
+# save_dir = f'./corrosion1d/data/final_corrosion_depth'
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
@@ -66,6 +67,7 @@ elif mode == 'test':
     Lp_values = [5.0e-9, 2.5e-8, 5.0e-7, 1.0e-6, 1.0e-3, 5.0e-1]
 else:
     raise ValueError("Invalid mode. Choose 'train_valid' or 'test'.")
+# Lp_values = np.exp(np.linspace(np.log(1e-10), np.log(1e0), 128))
 cse = 1.
 cle = 5100/1.43e5
 
@@ -105,6 +107,7 @@ times = np.linspace(0, total_time, num_steps + 1)
 # Initialize storage array: [num_Lp, num_time, num_variables, num_points]
 num_points = mesh_points.shape[0]
 results = np.zeros((len(Lp_values), num_steps + 1, 2, num_points))  # +1 for initial condition
+final_corrosion_depth = np.zeros((len(Lp_values),))
 
 # Loop over Lp values
 for lp_idx, Lp in enumerate(Lp_values):
@@ -168,6 +171,12 @@ for lp_idx, Lp in enumerate(Lp_values):
         pc_t.vector()[:] = pc_sol.vector()
 
     print(f"Completed simulation for Lp = {Lp}")
+
+# final_sol = results[:, -1, 0, :]  # Final p values for all Lp
+# corroded_region_frac = np.sum(final_sol < 0.5, axis=1) / final_sol.shape[1]
+# final_corrosion_depth = corroded_region_frac * (L[1] - L[0]) - 15e-6  # Adjusted by initial notch position
+# np.save(f'{save_dir}/final_corrosion_depth.npy', final_corrosion_depth)
+
 
 # Save the complete results array
 np.save(f'{save_dir}/solutions.npy', results)

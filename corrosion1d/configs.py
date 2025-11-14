@@ -3,6 +3,7 @@ import jax.numpy as jnp
 
 @dataclass(frozen=True)
 class Configs:
+    DEBUG_MODE = False
     
     # Model architecture settings
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
@@ -26,10 +27,12 @@ class Configs:
     test_every = 500
     physical_residual = True
     
-    save_dir = f"./runs/{model_type.upper()}-PI/" \
-        if physical_residual else f"./runs/{model_type.upper()}/"
-    data_dir = "./data/train_valid/"
-    test_data_dir = "./data/test/"
+    save_dir = f"./corrosion1d/runs/{model_type.upper()}-PI/" \
+        if physical_residual else f"./corrosion1d/runs/{model_type.upper()}/"
+    if DEBUG_MODE:
+        save_dir = save_dir[:-1] + "_DEBUG/"
+    data_dir = "./corrosion1d/data/train_valid/"
+    test_data_dir = "./corrosion1d/data/test/"
     
     Lc = 1e-4 # xc = x / Lc
     Tc = 1.0 # tc = t / Tc

@@ -1,9 +1,5 @@
-from typing import Callable, List
-
 import equinox as eqx
-import jax
 import jax.numpy as jnp
-from jax.nn.initializers import glorot_normal
 
 class AutoRegressiveModel1d(eqx.Module):
 

@@ -1,13 +1,10 @@
-from functools import partial
-
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jax import vmap
-import optax
-import scipy
 
-from model1d.base_model1d import AutoRegressiveModel1d
+
+from .model1d.base_model1d import AutoRegressiveModel1d
 
 
 class FDM1D:

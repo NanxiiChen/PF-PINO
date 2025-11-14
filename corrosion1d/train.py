@@ -7,9 +7,10 @@ import jax.numpy as jnp
 import optax
 from sklearn.model_selection import train_test_split
 
-from configs import Configs
-from losses import Losses
-from model1d import get_model1d
+
+from .configs import Configs
+from .losses import Losses
+from .model1d import get_model1d
 
 
 def dataloader(
