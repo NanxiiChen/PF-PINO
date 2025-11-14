@@ -86,12 +86,6 @@ def main():
         'key': jax.random.PRNGKey(0),
     }
     
-    # Add VAE-specific parameters if needed
-    if configs.model_type == 'vae':
-        model_kwargs.update({
-            'latent_dim': configs.latent_dim,
-            'output_size': configs.output_size,
-        })
     
     model = get_model1d(
         configs.model_type,
