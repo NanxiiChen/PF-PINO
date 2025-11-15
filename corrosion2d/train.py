@@ -63,7 +63,7 @@ def main():
     meshes = data["meshes"]  # (nx, ny, 2), normalized
     meshes = jnp.transpose(meshes, (2, 0, 1))  # (2, nx, ny)
     times = data["times"]  
-    dt = times[0] - times[1]  # normalized
+    dt = times[1] - times[0]  # normalized
     dx = meshes[0, 0, 1] - meshes[0, 0, 0]  # normalized
     dy = meshes[1, 1, 0] - meshes[1, 0, 0]  # normalized
     # dy = meshes[1, 0, 1] - meshes[0, 0, 1]  # normalized

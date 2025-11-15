@@ -23,8 +23,8 @@ class Configs:
     end_value = 1e-5
 
     batch_size = 128 if model_type != "unet" else 32
-    epochs = 10000
-    save_every = 50
+    epochs = 2000
+    save_every = 20
     test_every = 100
     physical_residual = True
 
