@@ -44,6 +44,15 @@ def train_step(model, loss_fn, state, optimizer, xs, ys, **kwargs):
     new_model = eqx.apply_updates(model, updates)
     return new_model, new_state, loss
 
+@eqx.filter_jit
+def train_step_pi(model, loss_fn, state, optimizer, 
+                  xs, ys, dx, dy, dt, configs, **kwargs):
+    (weighted_loss, (loss_components, weight_components, aux_vars)), grad = eqx.filter_value_and_grad(
+        loss_fn, has_aux=True
+    )(model, xs, ys, dx, dy, dt, configs, **kwargs)
+    updates, new_state = optimizer.update(grad, state, model)
+    new_model = eqx.apply_updates(model, updates)
+    return new_model, new_state, weighted_loss, loss_components, weight_components, aux_vars
 
 def main():
     configs = Configs()
@@ -52,10 +61,13 @@ def main():
     Xs = data["Xs"]  # (samples, 5, nx, ny)
     Ys = data["Ys"]  # (samples, 2, nx, ny)
     meshes = data["meshes"]  # (nx, ny, 2), normalized
+    meshes = jnp.transpose(meshes, (2, 0, 1))  # (2, nx, ny)
     times = data["times"]  
     dt = times[0] - times[1]  # normalized
-    dy = meshes[1, 0, 1] - meshes[0, 0, 1]  # normalized
-    dx = meshes[0, 1, 0] - meshes[0, 0, 0]  # normalized
+    dx = meshes[0, 0, 1] - meshes[0, 0, 0]  # normalized
+    dy = meshes[1, 1, 0] - meshes[1, 0, 0]  # normalized
+    # dy = meshes[1, 0, 1] - meshes[0, 0, 1]  # normalized
+    # dx = meshes[0, 1, 0] - meshes[0, 0, 0]  # normalized
     print(f"dt: {dt}, dx: {dx}, dy: {dy}")
     train_x_full, valid_x_full, train_y_full, valid_y_full = train_test_split(
         Xs, Ys, test_size=0.25, random_state=0
@@ -118,13 +130,19 @@ def main():
         val_loss_epoch = 0.0
         for train_batch_x, train_batch_y in train_loader:
             if configs.physical_residual:
-                pass
+                model, opt_state, weighted_loss, loss_components, weight_components, aux_vars = train_step_pi(
+                    model, loss_fn,
+                    opt_state, optimizer, 
+                    train_batch_x, train_batch_y,
+                    dx=dx, dy=dy, dt=dt, configs=configs,
+                    pde_name=pde_name,
+                )
+                train_loss_epoch += loss_components[0].item() * train_batch_x.shape[0]
             else:
                 model, opt_state, loss = train_step(
                     model, loss_fn,
                     opt_state, optimizer,
                     train_batch_x, train_batch_y,
-                    # meshes=meshes,
                 )
                 train_loss_epoch += loss.item() * train_batch_x.shape[0]
         train_loss_epoch /= train_x_full.shape[0]
@@ -137,11 +155,10 @@ def main():
         valid_loss_history.append(val_loss_epoch)
         
         if configs.physical_residual:
-            pass
-            # ac_loss = loss_components[1].item()
-            # ch_loss = loss_components[2].item()
-            # with open(os.path.join(savedir, "logs.csv"), "a") as f:
-            #     f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss},{ch_loss}\n")
+            ac_loss = loss_components[1].item()
+            ch_loss = loss_components[2].item()
+            with open(os.path.join(savedir, "logs.csv"), "a") as f:
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss},{ch_loss}\n")
         else:
             with open(os.path.join(savedir, "logs.csv"), "a") as f:
                 f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},0,0\n")
@@ -168,7 +185,7 @@ def main():
             test_meshes = test_meshes / configs.Lc
             dt = test_times[1] - test_times[0]
             x_test = test_solutions[:, 0, :, :, :] # (samples, channel, nx, ny)
-            steps = 1
+            steps = 100
             y_test = test_solutions[:, 1:steps+1, :, :, :] # (samples, channel, nx, ny)
             auto_reg_fn = partial(
                 model.auto_reg,

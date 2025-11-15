@@ -3,7 +3,7 @@ import jax.numpy as jnp
 
 @dataclass(frozen=True)
 class Configs:
-    DEBUG_MODE = True
+    DEBUG_MODE = False
 
     # Model architecture settings
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
@@ -18,15 +18,15 @@ class Configs:
 
 
     learning_rate = 1e-3
-    decay_every = 100
-    decay_rate = 0.95
+    decay_every = 50
+    decay_rate = 0.9
     end_value = 1e-5
 
-    batch_size = 64 if model_type != "unet" else 32
+    batch_size = 128 if model_type != "unet" else 32
     epochs = 10000
-    save_every = 20
-    test_every = 20
-    physical_residual = False
+    save_every = 50
+    test_every = 100
+    physical_residual = True
 
     save_dir = f"./corrosion2d/runs/{model_type.upper()}-PI/" \
         if physical_residual else f"./corrosion2d/runs/{model_type.upper()}/"
@@ -39,7 +39,7 @@ class Configs:
     Tc = 100.0 # tc = t / Tc
 
 
-    AC_PRE_SCALE = 1e8
+    AC_PRE_SCALE = 1e0
     CH_PRE_SCALE = 1e4
 
     ALPHA_PHI = 9.62e-5/4
