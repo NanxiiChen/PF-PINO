@@ -49,9 +49,13 @@ class FDM1D:
         d2udx2 = jnp.zeros_like(u)
         d2udx2 = d2udx2.at[1:-1].set((u[2:] - 2 * u[1:-1] + u[:-2]) / (dx ** 2))
         # Second derivative at the first point using forward difference
-        d2udx2 = d2udx2.at[0].set((u[2] - 2 * u[1] + u[0]) / (dx ** 2))
+        # d2udx2 = d2udx2.at[0].set((u[2] - 2 * u[1] + u[0]) / (dx ** 2))
+        # u''(0) = (2u0 - 5u1 + 4u2 - u3)/dx^2
+        d2udx2 = d2udx2.at[0].set((2*u[0] - 5*u[1] + 4*u[2] - u[3]) / (dx ** 2))
         # Second derivative at the last point using backward difference
-        d2udx2 = d2udx2.at[-1].set((u[-1] - 2 * u[-2] + u[-3]) / (dx ** 2))
+        # d2udx2 = d2udx2.at[-1].set((u[-1] - 2 * u[-2] + u[-3]) / (dx ** 2))
+        # u''(N) = (2uN - 5u(N-1) + 4u(N-2) - u(N-3))/dx^2
+        d2udx2 = d2udx2.at[-1].set((2*u[-1] - 5*u[-2] + 4*u[-3] - u[-4]) / (dx ** 2))
         return d2udx2
 
 
@@ -115,8 +119,6 @@ class Losses:
                 + AC2 * dg_dphi
                 - AC3 * lap_phi
             )
-            # residual = residual.at[0].set(0.0)  # enforce boundary condition at the first point
-            # residual = residual.at[-1].set(0.0)  # enforce boundary condition
             return residual / configs.AC_PRE_SCALE
 
         residuals = vmap(residual_fn, in_axes=(0, 0, None, None))(xs, Lps, dx, dt)
@@ -170,8 +172,6 @@ class Losses:
                 - CH1 * lap_c
                 + CH1 * (configs.CSE - configs.CLE) * lap_h_phi
             )
-            residual = residual.at[0].set(0.0)  # enforce boundary condition at the first point
-            residual = residual.at[-1].set(0.0)  # enforce boundary condition
             return residual / configs.CH_PRE_SCALE
 
         residuals = vmap(residual_fn, in_axes=(0, 0, None, None))(xs, Lps, dx, dt)
@@ -222,9 +222,17 @@ class Losses:
         return total_loss, (losses, weights, aux_vars)
             
     @classmethod
+    @eqx.filter_jit
     def grad_norm_weights(cls, grads: list, eps=1e-6):
         def tree_norm(pytree):
-            squared_sum = sum(jnp.sum(x**2) for x in jax.tree_util.tree_leaves(pytree))
+            # 只保留可微的数组叶子（与 optimizer.init 使用的一致）
+            arr_tree = eqx.filter(pytree, eqx.is_array)
+            # 使用 tree_reduce 避免 Python 分支；initializer 在空树时生效
+            squared_sum = jax.tree_util.tree_reduce(
+                lambda acc, leaf: acc + jnp.sum(jnp.square(leaf)),
+                arr_tree,
+                initializer=0.0
+            )
             return jnp.sqrt(squared_sum)
         grad_norms = jnp.array([tree_norm(grad) for grad in grads])
         grad_norms = jnp.clip(grad_norms, eps, 1 / eps)
