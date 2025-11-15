@@ -3,8 +3,8 @@ import math
 import fenics as fn
 import numpy as np
 
-# mode = 'train_valid'
-mode = 'test' 
+mode = 'train_valid'
+# mode = 'test' 
 
 save_dir = './corrosion2d/data/train_valid' if mode == 'train_valid' else './corrosion2d/data/test'
 if not os.path.exists(save_dir):
@@ -107,7 +107,7 @@ grid_points = np.vstack([X.ravel(), Y.ravel()]).T
 np.save(f'./{save_dir}/mesh_dof_coords.npy', dof_points_p)
 np.save(f'./{save_dir}/mesh_grid_coords.npy', grid_points.reshape((ny + 1, nx + 1, 2)))
 
-num_initials = 10 if mode == 'train_valid' else 5
+num_initials = 20 if mode == 'train_valid' else 5
 initial_seeds = [100 + i for i in range(num_initials)] \
     if mode == 'train_valid' \
     else [200 + i for i in range(num_initials)]
