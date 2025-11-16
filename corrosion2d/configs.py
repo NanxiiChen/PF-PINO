@@ -18,12 +18,12 @@ class Configs:
 
 
     learning_rate = 1e-3
-    decay_every = 50
-    decay_rate = 0.9
+    decay_every = 100
+    decay_rate = 0.95
     end_value = 1e-5
 
     batch_size = 128 if model_type != "unet" else 32
-    epochs = 2000
+    epochs = 4000
     save_every = 100
     test_every = 100
     physical_residual = True

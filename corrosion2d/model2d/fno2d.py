@@ -24,15 +24,15 @@ class SpectralConv2d(eqx.Module):
         self.modes_x = modes_x
         self.modes_y = modes_y
 
-        real_key, imag_key = jax.random.split(key)
+        k1, k2, k3, k4 = jax.random.split(key, 4)
         self.real_weights_pos = glorot_normal(
-            )(real_key, (in_channels, out_channels, modes_x, modes_y))
+            )(k1, (in_channels, out_channels, modes_x, modes_y))
         self.imag_weights_pos = glorot_normal(
-            )(imag_key, (in_channels, out_channels, modes_x, modes_y))
+            )(k2, (in_channels, out_channels, modes_x, modes_y))
         self.real_weights_neg = glorot_normal(
-            )(real_key, (in_channels, out_channels, modes_x, modes_y))
+            )(k3, (in_channels, out_channels, modes_x, modes_y))
         self.imag_weights_neg = glorot_normal(
-            )(imag_key, (in_channels, out_channels, modes_x, modes_y))
+            )(k4, (in_channels, out_channels, modes_x, modes_y))
         
     def __call__(self, x):
         channels, size_x, size_y = x.shape # batched along `samples` dimension
@@ -68,6 +68,7 @@ class FNOBlock2d(eqx.Module):
         self.bypass_conv = eqx.nn.Conv2d(
             in_channels, out_channels,
             kernel_size=(1, 1), key=bypass_key)
+        self.activation = activation
         
     def __call__(self, x):
         x1 = self.spectral_conv(x)

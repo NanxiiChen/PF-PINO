@@ -38,7 +38,7 @@ def get_model1d(model_type, in_channels, out_channels, **kwargs):
         # FCN model parameters
         width = kwargs.get('width', 128)
         depth = kwargs.get('depth', 4)
-        activation = kwargs.get('activation', jax.nn.relu)
+        activation = kwargs.get('activation', jax.nn.gelu)
         
         return FCN1d(
             in_channels=in_channels,
@@ -54,7 +54,7 @@ def get_model1d(model_type, in_channels, out_channels, **kwargs):
         # UNet model parameters
         width = kwargs.get('width', 64)
         depth = kwargs.get('depth', 3)
-        activation = kwargs.get('activation', jax.nn.relu)
+        activation = kwargs.get('activation', jax.nn.gelu)
         
         return UNet1d(
             in_channels=in_channels,

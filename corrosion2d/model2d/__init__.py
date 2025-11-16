@@ -22,7 +22,7 @@ def get_model2d(model_type, in_channels, out_channels, **kwargs):
         modes_y = kwargs.get('modes_y', 16)
         width = kwargs.get('width', 64)
         depth = kwargs.get('depth', 4)
-        activation = kwargs.get('activation', jax.nn.relu)
+        activation = kwargs.get('activation', jax.nn.gelu)
 
         return FNO2d(
             in_channels=in_channels,
@@ -40,7 +40,7 @@ def get_model2d(model_type, in_channels, out_channels, **kwargs):
         # UNet model parameters
         width = kwargs.get('width', 64)
         depth = kwargs.get('depth', 4)
-        activation = kwargs.get('activation', jax.nn.relu)
+        activation = kwargs.get('activation', jax.nn.gelu)
         
         return UNet2d(
             in_channels=in_channels,
