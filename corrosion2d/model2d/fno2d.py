@@ -110,4 +110,5 @@ class FNO2d(AutoRegressiveModel2d):
             x = block(x)
         x = self.projection(x)
         return jax.nn.tanh(x) / 2 + 0.5
+        # return x
                  

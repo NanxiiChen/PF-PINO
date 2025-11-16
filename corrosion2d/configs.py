@@ -12,8 +12,8 @@ class Configs:
     out_channels = 2 # phi, c
     modes_x = 8
     modes_y = 8
-    width = 64 # channel width in spectral conv layer
-    depth = 4
+    width = 64 if model_type != "unet" else 32
+    depth = 4 if model_type != "unet" else 2
     activation = "gelu"
 
 
@@ -24,7 +24,7 @@ class Configs:
 
     batch_size = 128 if model_type != "unet" else 32
     epochs = 2000
-    save_every = 20
+    save_every = 100
     test_every = 100
     physical_residual = True
 
