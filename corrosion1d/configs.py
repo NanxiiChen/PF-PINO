@@ -3,7 +3,7 @@ import jax.numpy as jnp
 
 @dataclass(frozen=True)
 class Configs:
-    DEBUG_MODE = True
+    DEBUG_MODE = False
     
     # Model architecture settings
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
@@ -11,8 +11,8 @@ class Configs:
     in_channels = 5 # phi, c, lp, mesh, time
     out_channels = 2 # phi, c
     modes = 8
-    width = 64 # channel width in spectral conv layer
-    depth = 4
+    width = 64 if model_type != "unet" else 32
+    depth = 4 if model_type != "unet" else 2
     activation = "gelu"
 
     
@@ -21,7 +21,7 @@ class Configs:
     decay_rate = 0.95
     end_value = 1e-5
     
-    batch_size = 128 if model_type != "unet" else 32
+    batch_size = 128
     epochs = 10000
     save_every = 100
     test_every = 500

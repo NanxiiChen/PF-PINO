@@ -2,7 +2,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jax import vmap
-
+from jax.flatten_util import ravel_pytree
 
 from .model1d.base_model1d import AutoRegressiveModel1d
 
@@ -62,7 +62,6 @@ class FDM1D:
 class Losses:
 
     @classmethod
-    @eqx.filter_jit
     def mse_loss(cls, model: AutoRegressiveModel1d, 
                  xs: jnp.ndarray, 
                  ys: jnp.ndarray, 
@@ -93,7 +92,6 @@ class Losses:
             jnp.ndarray: Computed Allen-Cahn loss, scalar.
         """
 
-        @eqx.filter_jit
         def residual_fn(x, Lp, dx, dt):
             AC1 = 2 * configs.AA * Lp * configs.Tc
             AC2 = Lp * configs.OMEGA_PHI * configs.Tc
@@ -148,7 +146,6 @@ class Losses:
             jnp.ndarray: Computed Cahn-Hilliard loss, scalar.
         """
 
-        @eqx.filter_jit
         def residual_fn(x, Lp, dx, dt):
             CH1 = 2 * configs.AA * configs.MM * configs.Tc / configs.Lc**2
             pred = model.forward(x)
@@ -191,12 +188,12 @@ class Losses:
                 **kwargs) -> jnp.ndarray:
         # total_loss = mse_loss_value + ac_loss_value + ch_loss_value
         
-        loss_fns = [cls.mse_loss, cls.ac_loss, cls.ch_loss]
+        # loss_fns = [cls.mse_loss, cls.ac_loss, cls.ch_loss]
         losses = []
         grads = []
         aux_vars = {}
-        for loss_fn in loss_fns:
-            (loss, aux_var), grad = eqx.filter_value_and_grad(loss_fn, has_aux=True)(
+        for vg in VG_FNS:
+            (loss, aux_var), grad = vg(
                 model,
                 xs,
                 ys=ys,
@@ -222,18 +219,11 @@ class Losses:
         return total_loss, (losses, weights, aux_vars)
             
     @classmethod
-    @eqx.filter_jit
     def grad_norm_weights(cls, grads: list, eps=1e-6):
         def tree_norm(pytree):
-            # 只保留可微的数组叶子（与 optimizer.init 使用的一致）
-            arr_tree = eqx.filter(pytree, eqx.is_array)
-            # 使用 tree_reduce 避免 Python 分支；initializer 在空树时生效
-            squared_sum = jax.tree_util.tree_reduce(
-                lambda acc, leaf: acc + jnp.sum(jnp.square(leaf)),
-                arr_tree,
-                initializer=0.0
-            )
-            return jnp.sqrt(squared_sum)
+            r, _ = ravel_pytree(pytree)   # 一次性把 pytree 展平成 1D 向量
+            return jnp.linalg.norm(r)
+
         grad_norms = jnp.array([tree_norm(grad) for grad in grads])
         grad_norms = jnp.clip(grad_norms, eps, 1 / eps)
         # weights = jnp.mean(grad_norms) / (grad_norms + eps)
@@ -242,3 +232,8 @@ class Losses:
         weights = jnp.clip(weights, eps, 1 / eps)
         return jax.lax.stop_gradient(weights)
         
+
+MSE_VG = eqx.filter_value_and_grad(Losses.mse_loss, has_aux=True)
+AC_VG  = eqx.filter_value_and_grad(Losses.ac_loss, has_aux=True)
+CH_VG  = eqx.filter_value_and_grad(Losses.ch_loss, has_aux=True)
+VG_FNS = [MSE_VG, AC_VG, CH_VG]
