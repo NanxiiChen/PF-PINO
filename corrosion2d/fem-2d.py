@@ -3,8 +3,8 @@ import math
 import fenics as fn
 import numpy as np
 
-mode = 'train_valid'
-# mode = 'test' 
+# mode = 'train_valid'
+mode = 'test' 
 
 save_dir = './corrosion2d/data/train_valid' if mode == 'train_valid' else './corrosion2d/data/test'
 if not os.path.exists(save_dir):
@@ -57,6 +57,31 @@ def make_random_profile(xmin, xmax, n_modes=6, amp_scale=0.25, seed=None):
         return np.clip(base + sum_val, *L2)
     return profile
 
+def make_random_profile_with_phase(xmin, xmax, n_modes=6, amp_scale=0.25, seed=None):
+    """
+    带相位的版本，使用 cos(πnx/L) 确保边界条件
+    注意：这里使用 πn 而不是 2πn，这样半波长模式也能被包含
+    """
+    rng = np.random.default_rng(seed)
+    L = xmax - xmin
+    
+    # 使用整数倍的半波模式
+    ks = np.arange(1, n_modes + 1)
+    amps = rng.normal(scale=amp_scale / np.sqrt(ks), size=ks.shape)
+    
+    def profile(x):
+        xi = (np.asarray(x) - xmin) / L
+        
+        sum_val = np.zeros_like(xi, dtype=float)
+        for k, a in zip(ks, amps):
+            # cos(πkξ) 在 ξ=0 和 ξ=1 处导数为零
+            # k=1: 半波, k=2: 全波, k=3: 1.5波, ...
+            sum_val += a * np.cos(np.pi * k * xi)
+        
+        base = L2[1] / 3 * 2
+        return np.clip(base + sum_val, *L2)
+    
+    return profile
 
 class InitialConditions(fn.UserExpression):
     def __init__(self, profile_callable, **kwargs):
@@ -107,7 +132,7 @@ grid_points = np.vstack([X.ravel(), Y.ravel()]).T
 np.save(f'./{save_dir}/mesh_dof_coords.npy', dof_points_p)
 np.save(f'./{save_dir}/mesh_grid_coords.npy', grid_points.reshape((ny + 1, nx + 1, 2)))
 
-num_initials = 20 if mode == 'train_valid' else 5
+num_initials = 10 if mode == 'train_valid' else 5
 initial_seeds = [100 + i for i in range(num_initials)] \
     if mode == 'train_valid' \
     else [200 + i for i in range(num_initials)]
@@ -132,7 +157,7 @@ Jpc_template = fn.derivative(E_pc_template, pc_sol, tpc)
 
 
 for i, seed in enumerate(initial_seeds):
-    profile = make_random_profile(L1[0], L1[1], n_modes=3, amp_scale=2.0e-6, seed=seed)
+    profile = make_random_profile_with_phase(L1[0], L1[1], n_modes=10, amp_scale=2.0e-6, seed=seed)
     init_expr = InitialConditions(profile, degree=2)
 
     pc_sol.interpolate(init_expr)
