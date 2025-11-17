@@ -21,12 +21,13 @@ class AutoRegressiveModel2d(eqx.Module):
     def auto_reg(self, u0, meshes, dt, steps):
         # meshes: [2, Sx, Sy]
         preds = []
+        t_channel = jnp.full(
+            (1, meshes.shape[1], meshes.shape[2]),
+            dt
+        )
         u = u0 # vmap outside the function, so u0 shape is [C, Sx, Sy] without B
         for step in range(steps):
-            t_channel = jnp.full(
-                (1, meshes.shape[1], meshes.shape[2]),
-                dt
-            )
+
             inputs = jnp.concatenate([u, meshes, t_channel], 
                                      axis=0)  # [C+3, Sx, Sy]
             u = self.forward(inputs)  # [C, Sx, Sy]

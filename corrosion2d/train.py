@@ -18,7 +18,6 @@ def dataloader(
     dataset_x,
     dataset_y,
     batch_size,
-    down_scale=1
 ):
     n_samples = dataset_x.shape[0]
 
@@ -32,7 +31,7 @@ def dataloader(
 
         batch_indices = permutation[start:end]
 
-        yield dataset_x[batch_indices, ..., ::down_scale], dataset_y[batch_indices, ..., ::down_scale]
+        yield dataset_x[batch_indices], dataset_y[batch_indices]
 
 
 @eqx.filter_jit
@@ -115,7 +114,7 @@ def main():
         os.makedirs(savedir)
     
     with open(os.path.join(savedir, "logs.csv"), "w") as f:
-        f.write("Epoch,TrainLoss,ValidLoss,ACLoss,CHLoss\n")
+        f.write("Epoch,TrainLoss,ValidLoss,ACLoss,CHLoss,BCLoss\n")
         
     with open(os.path.join(savedir, "test_logs.csv"), "w") as f:
         f.write("Epoch,TestMSE\n")
@@ -123,9 +122,9 @@ def main():
     for epoch in range(configs.epochs):
         # pde_name = "ac" if epoch % 1000 < 500 else "ch"
         pde_name = "both"
-        shuffle_key, train_key, subkey = jax.random.split(shuffle_key, 3)
+        shuffle_key, train_key, valid_key = jax.random.split(shuffle_key, 3)
         train_loader = dataloader(train_key, train_x_full, train_y_full, batch_size=batch_size)
-        valid_loader = dataloader(subkey, valid_x_full, valid_y_full, batch_size=batch_size)
+        valid_loader = dataloader(valid_key, valid_x_full, valid_y_full, batch_size=batch_size)
         train_loss_epoch = 0.0
         val_loss_epoch = 0.0
         for train_batch_x, train_batch_y in train_loader:
@@ -157,8 +156,9 @@ def main():
         if configs.physical_residual:
             ac_loss = loss_components[1].item()
             ch_loss = loss_components[2].item()
+            bc_loss = loss_components[3].item()
             with open(os.path.join(savedir, "logs.csv"), "a") as f:
-                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss},{ch_loss}\n")
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss},{ch_loss},{bc_loss}\n")
         else:
             with open(os.path.join(savedir, "logs.csv"), "a") as f:
                 f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},0,0\n")

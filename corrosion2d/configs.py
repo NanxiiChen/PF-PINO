@@ -12,17 +12,17 @@ class Configs:
     out_channels = 2 # phi, c
     modes_x = 8
     modes_y = 8
-    width = 64 if model_type != "unet" else 32
+    width = 64 if model_type != "unet" else 16
     depth = 4 if model_type != "unet" else 2
-    activation = "gelu"
+    activation = "relu"
 
 
-    learning_rate = 1e-3
+    learning_rate = 5e-4
     decay_every = 100
-    decay_rate = 0.95
+    decay_rate = 0.90
     end_value = 1e-5
 
-    batch_size = 128 if model_type != "unet" else 32
+    batch_size = 128
     epochs = 4000
     save_every = 100
     test_every = 100

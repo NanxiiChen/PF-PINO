@@ -124,9 +124,9 @@ def main():
     for epoch in range(configs.epochs):
         # pde_name = "ac" if epoch % 1000 < 500 else "ch"
         pde_name = "both"
-        shuffle_key, train_key, subkey = jax.random.split(shuffle_key, 3)
+        shuffle_key, train_key, valid_key = jax.random.split(shuffle_key, 3)
         train_loader = dataloader(train_key, train_x_full, train_y_full, batch_size=batch_size)
-        valid_loader = dataloader(subkey, valid_x_full, valid_y_full, batch_size=batch_size)
+        valid_loader = dataloader(valid_key, valid_x_full, valid_y_full, batch_size=batch_size)
         train_loss_epoch = 0.0
         val_loss_epoch = 0.0
         for train_batch_x, train_batch_y in train_loader:
