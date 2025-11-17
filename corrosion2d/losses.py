@@ -238,5 +238,5 @@ class Losses:
 MSE_VG = eqx.filter_value_and_grad(Losses.mse_loss, has_aux=True)
 AC_VG  = eqx.filter_value_and_grad(Losses.ac_loss, has_aux=True)
 CH_VG  = eqx.filter_value_and_grad(Losses.ch_loss, has_aux=True)
-BC_VG  = eqx.filter_value_and_grad(Losses.bc_loss, has_aux=True)
-VG_FNS = [MSE_VG, AC_VG, CH_VG, BC_VG]
+# BC_VG  = eqx.filter_value_and_grad(Losses.bc_loss, has_aux=True)
+VG_FNS = [MSE_VG, AC_VG, CH_VG,]

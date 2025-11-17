@@ -132,7 +132,7 @@ Jpc_template = fn.derivative(E_pc_template, pc_sol, tpc)
 
 
 for i, seed in enumerate(initial_seeds):
-    profile = make_random_profile(L2[0], L2[1], n_modes=3, amp_scale=2.0e-6, seed=seed)
+    profile = make_random_profile(L1[0], L1[1], n_modes=3, amp_scale=2.0e-6, seed=seed)
     init_expr = InitialConditions(profile, degree=2)
 
     pc_sol.interpolate(init_expr)

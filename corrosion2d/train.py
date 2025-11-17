@@ -114,7 +114,7 @@ def main():
         os.makedirs(savedir)
     
     with open(os.path.join(savedir, "logs.csv"), "w") as f:
-        f.write("Epoch,TrainLoss,ValidLoss,ACLoss,CHLoss,BCLoss\n")
+        f.write("Epoch,TrainLoss,ValidLoss,ACLoss,CHLoss\n")
         
     with open(os.path.join(savedir, "test_logs.csv"), "w") as f:
         f.write("Epoch,TestMSE\n")
@@ -127,6 +127,8 @@ def main():
         valid_loader = dataloader(valid_key, valid_x_full, valid_y_full, batch_size=batch_size)
         train_loss_epoch = 0.0
         val_loss_epoch = 0.0
+        ac_loss_epoch = 0.0
+        ch_loss_epoch = 0.0
         for train_batch_x, train_batch_y in train_loader:
             if configs.physical_residual:
                 model, opt_state, weighted_loss, loss_components, weight_components, aux_vars = train_step_pi(
@@ -137,6 +139,9 @@ def main():
                     pde_name=pde_name,
                 )
                 train_loss_epoch += loss_components[0].item() * train_batch_x.shape[0]
+                ac_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
+                ch_loss_epoch += loss_components[2].item() * train_batch_x.shape[0]
+
             else:
                 model, opt_state, loss = train_step(
                     model, loss_fn,
@@ -146,6 +151,9 @@ def main():
                 train_loss_epoch += loss.item() * train_batch_x.shape[0]
         train_loss_epoch /= train_x_full.shape[0]
         train_loss_history.append(train_loss_epoch)
+        if configs.physical_residual:
+            ac_loss_epoch /= train_x_full.shape[0]
+            ch_loss_epoch /= train_x_full.shape[0]
         
         for val_batch_x, val_batch_y in valid_loader:
             val_loss, _ = losses.mse_loss(model, val_batch_x, val_batch_y,)
@@ -153,15 +161,10 @@ def main():
         val_loss_epoch /= valid_x_full.shape[0]
         valid_loss_history.append(val_loss_epoch)
         
-        if configs.physical_residual:
-            ac_loss = loss_components[1].item()
-            ch_loss = loss_components[2].item()
-            bc_loss = loss_components[3].item()
-            with open(os.path.join(savedir, "logs.csv"), "a") as f:
-                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss},{ch_loss},{bc_loss}\n")
-        else:
-            with open(os.path.join(savedir, "logs.csv"), "a") as f:
-                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},0,0\n")
+
+        with open(os.path.join(savedir, "logs.csv"), "a") as f:
+            f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss_epoch},{ch_loss_epoch}\n")
+
 
         if epoch % configs.save_every == 0 or epoch == configs.epochs - 1:
             print(
