@@ -18,15 +18,16 @@ class Configs:
 
 
     learning_rate = 5e-4
-    decay_every = 100
-    decay_rate = 0.90
+    decay_every = 200
+    decay_rate = 0.95
     end_value = 1e-5
+    
 
     batch_size = 128
     epochs = 4000
     save_every = 100
-    test_every = 100
-    physical_residual = True
+    test_every = 500
+    physical_residual = False
 
     save_dir = f"./corrosion2d/runs/{model_type.upper()}-PI/" \
         if physical_residual else f"./corrosion2d/runs/{model_type.upper()}/"

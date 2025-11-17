@@ -24,12 +24,12 @@ class FDM2d:
         dudy = jnp.zeros_like(u)
 
         dudx = dudx.at[:, 1:-1].set((u[:, 2:] - u[:, :-2]) / (2 * dx))
-        # dudx = dudx.at[:, 0].set((u[:, 1] - u[:, 0]) / dx)
-        # dudx = dudx.at[:, -1].set((u[:, -1] - u[:, -2]) / dx)
+        dudx = dudx.at[:, 0].set((u[:, 1] - u[:, 0]) / dx)
+        dudx = dudx.at[:, -1].set((u[:, -1] - u[:, -2]) / dx)
 
         dudy = dudy.at[1:-1, :].set((u[2:, :] - u[:-2, :]) / (2 * dy))
-        # dudy = dudy.at[0, :].set((u[1, :] - u[0, :]) / dy)
-        # dudy = dudy.at[-1, :].set((u[-1, :] - u[-2, :]) / dy)
+        dudy = dudy.at[0, :].set((u[1, :] - u[0, :]) / dy)
+        dudy = dudy.at[-1, :].set((u[-1, :] - u[-2, :]) / dy)
 
         return jnp.stack([dudx, dudy], axis=0)
     
@@ -48,12 +48,12 @@ class FDM2d:
         d2udy2 = jnp.zeros_like(u)
 
         d2udx2 = d2udx2.at[:, 1:-1].set((u[:, 2:] - 2 * u[:, 1:-1] + u[:, :-2]) / (dx ** 2))
-        # d2udx2 = d2udx2.at[:, 0].set((2.0*u[:, 0] - 5.0*u[:, 1] + 4.0*u[:, 2] - u[:, 3]) / (dx ** 2))
-        # d2udx2 = d2udx2.at[:, -1].set((2.0*u[:, -1] - 5.0*u[:, -2] + 4.0*u[:, -3] - u[:, -4]) / (dx ** 2))
+        d2udx2 = d2udx2.at[:, 0].set((2.0*u[:, 0] - 5.0*u[:, 1] + 4.0*u[:, 2] - u[:, 3]) / (dx ** 2))
+        d2udx2 = d2udx2.at[:, -1].set((2.0*u[:, -1] - 5.0*u[:, -2] + 4.0*u[:, -3] - u[:, -4]) / (dx ** 2))
 
         d2udy2 = d2udy2.at[1:-1, :].set((u[2:, :] - 2 * u[1:-1, :] + u[:-2, :]) / (dy ** 2))
-        # d2udy2 = d2udy2.at[0, :].set((2.0*u[0, :] - 5.0*u[1, :] + 4.0*u[2, :] - u[3, :]) / (dy ** 2))
-        # d2udy2 = d2udy2.at[-1, :].set((2.0*u[-1, :] - 5.0*u[-2, :] + 4.0*u[-3, :] - u[-4, :]) / (dy ** 2))
+        d2udy2 = d2udy2.at[0, :].set((2.0*u[0, :] - 5.0*u[1, :] + 4.0*u[2, :] - u[3, :]) / (dy ** 2))
+        d2udy2 = d2udy2.at[-1, :].set((2.0*u[-1, :] - 5.0*u[-2, :] + 4.0*u[-3, :] - u[-4, :]) / (dy ** 2))
 
         return d2udx2 + d2udy2
 
@@ -111,7 +111,7 @@ class Losses:
             return residual / configs.AC_PRE_SCALE
         
         residuals = vmap(residual_fn, in_axes=(0, None, None, None))(xs, dx, dy, dt)
-        loss = jnp.mean(jnp.square(residuals[..., 1:-1, 1:-1]))
+        loss = jnp.mean(jnp.square(residuals))
         return loss, {}
     
     @classmethod
@@ -153,7 +153,7 @@ class Losses:
             return residual / configs.CH_PRE_SCALE
         
         residuals = vmap(residual_fn, in_axes=(0, None, None, None))(xs, dx, dy, dt)
-        loss = jnp.mean(jnp.square(residuals[..., 1:-1, 1:-1]))
+        loss = jnp.mean(jnp.square(residuals))
         return loss, {}
     
     @classmethod
