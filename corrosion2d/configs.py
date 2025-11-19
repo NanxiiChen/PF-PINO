@@ -24,10 +24,10 @@ class Configs:
     
 
     batch_size = 128
-    epochs = 4000
+    epochs = 10000
     save_every = 100
     test_every = 500
-    physical_residual = False
+    physical_residual = True
 
     save_dir = f"./corrosion2d/runs/{model_type.upper()}-PI/" \
         if physical_residual else f"./corrosion2d/runs/{model_type.upper()}/"
