@@ -3,7 +3,7 @@ import jax.numpy as jnp
 
 @dataclass(frozen=True)
 class Configs:
-    DEBUG_MODE = False
+    DEBUG_MODE = True
 
     # Model architecture settings
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
@@ -15,6 +15,7 @@ class Configs:
     width = 64 if model_type != "unet" else 16
     depth = 4 if model_type != "unet" else 2
     activation = "relu"
+    down_scale = 1 # Down-sampling factor for input data
 
 
     learning_rate = 5e-4
@@ -24,7 +25,7 @@ class Configs:
     
 
     batch_size = 128
-    epochs = 10000
+    epochs = 5000
     save_every = 100
     test_every = 500
     physical_residual = True

@@ -18,6 +18,7 @@ def dataloader(
     dataset_x,
     dataset_y,
     batch_size,
+    down_scale=1,
 ):
     n_samples = dataset_x.shape[0]
 
@@ -31,7 +32,11 @@ def dataloader(
 
         batch_indices = permutation[start:end]
 
-        yield dataset_x[batch_indices], dataset_y[batch_indices]
+        # yield dataset_x[batch_indices], dataset_y[batch_indices]
+        yield (
+            dataset_x[batch_indices, ..., ::down_scale, ::down_scale],
+            dataset_y[batch_indices, ..., ::down_scale, ::down_scale],
+        )
 
 
 @eqx.filter_jit
@@ -61,12 +66,11 @@ def main():
     Ys = data["Ys"]  # (samples, 2, nx, ny)
     meshes = data["meshes"]  # (nx, ny, 2), normalized
     meshes = jnp.transpose(meshes, (2, 0, 1))  # (2, nx, ny)
+    meshes = meshes[..., ::configs.down_scale, ::configs.down_scale]
     times = data["times"]  
     dt = times[1] - times[0]  # normalized
     dx = meshes[0, 0, 1] - meshes[0, 0, 0]  # normalized
     dy = meshes[1, 1, 0] - meshes[1, 0, 0]  # normalized
-    # dy = meshes[1, 0, 1] - meshes[0, 0, 1]  # normalized
-    # dx = meshes[0, 1, 0] - meshes[0, 0, 0]  # normalized
     print(f"dt: {dt}, dx: {dx}, dy: {dy}")
     train_x_full, valid_x_full, train_y_full, valid_y_full = train_test_split(
         Xs, Ys, test_size=0.25, random_state=0
@@ -123,8 +127,8 @@ def main():
         # pde_name = "ac" if epoch % 1000 < 500 else "ch"
         pde_name = "both"
         shuffle_key, train_key, valid_key = jax.random.split(shuffle_key, 3)
-        train_loader = dataloader(train_key, train_x_full, train_y_full, batch_size=batch_size)
-        valid_loader = dataloader(valid_key, valid_x_full, valid_y_full, batch_size=batch_size)
+        train_loader = dataloader(train_key, train_x_full, train_y_full, batch_size=batch_size, down_scale=configs.down_scale)
+        valid_loader = dataloader(valid_key, valid_x_full, valid_y_full, batch_size=batch_size, down_scale=1)
         train_loss_epoch = 0.0
         val_loss_epoch = 0.0
         ac_loss_epoch = 0.0
@@ -135,7 +139,8 @@ def main():
                     model, loss_fn,
                     opt_state, optimizer, 
                     train_batch_x, train_batch_y,
-                    dx=dx, dy=dy, dt=dt, configs=configs,
+                    dx=dx, dy=dy,
+                    dt=dt, configs=configs,
                     pde_name=pde_name,
                 )
                 train_loss_epoch += loss_components[0].item() * train_batch_x.shape[0]
