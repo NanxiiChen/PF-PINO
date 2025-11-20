@@ -3,7 +3,7 @@ import jax.numpy as jnp
 
 @dataclass(frozen=True)
 class Configs:
-    DEBUG_MODE = True
+    DEBUG_MODE = False
 
     # Model architecture settings
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
@@ -12,8 +12,8 @@ class Configs:
     out_channels = 2 # phi, c
     modes_x = 8
     modes_y = 8
-    width = 64 if model_type != "unet" else 16
-    depth = 4 if model_type != "unet" else 2
+    width = 64
+    depth = 4
     activation = "relu"
     down_scale = 2
 
@@ -28,10 +28,9 @@ class Configs:
     epochs = 5000
     save_every = 100
     test_every = 500
-    physical_residual = True
+    physical_residual = False
 
-    save_dir = f"./corrosion2d/runs/{model_type.upper()}-PI/" \
-        if physical_residual else f"./corrosion2d/runs/{model_type.upper()}/"
+    save_dir = "./corrosion2d/runs/FNO-DS2/" 
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
     data_dir = "./corrosion2d/data/train_valid/"

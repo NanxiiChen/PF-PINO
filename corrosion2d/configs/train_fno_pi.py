@@ -12,10 +12,10 @@ class Configs:
     out_channels = 2 # phi, c
     modes_x = 8
     modes_y = 8
-    width = 64 if model_type != "unet" else 16
-    depth = 4 if model_type != "unet" else 2
+    width = 64
+    depth = 4
     activation = "relu"
-    down_scale = 1 # Down-sampling factor for input data
+    down_scale = 1
 
 
     learning_rate = 5e-4
@@ -30,8 +30,7 @@ class Configs:
     test_every = 500
     physical_residual = True
 
-    save_dir = f"./corrosion2d/runs/{model_type.upper()}-PI/" \
-        if physical_residual else f"./corrosion2d/runs/{model_type.upper()}/"
+    save_dir = f"./corrosion2d/runs/FNO-PI/"
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
     data_dir = "./corrosion2d/data/train_valid/"

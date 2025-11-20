@@ -13,9 +13,9 @@ class Configs:
     modes_x = 8
     modes_y = 8
     width = 64
-    depth = 4 
+    depth = 4
     activation = "relu"
-    down_scale = 1 # Down-sampling factor for input data
+    down_scale = 2
 
 
     learning_rate = 5e-4
@@ -28,9 +28,9 @@ class Configs:
     epochs = 5000
     save_every = 100
     test_every = 500
-    physical_residual = False
+    physical_residual = True
 
-    save_dir = f"./corrosion2d/runs/FNO/"
+    save_dir = "./corrosion2d/runs/FNO-DS2-PI/" 
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
     data_dir = "./corrosion2d/data/train_valid/"
