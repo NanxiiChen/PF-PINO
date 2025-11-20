@@ -19,6 +19,10 @@
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "module": "corrosion2d.train",
+            "args": [
+                "--configs",
+                "train_fno_pi"
+            ]
         }
     ]
 }

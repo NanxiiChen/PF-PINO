@@ -7,10 +7,15 @@ import jax.numpy as jnp
 import optax
 from sklearn.model_selection import train_test_split
 
+import argparse
 
-from .configs import Configs
+
+
+# from .configs import Configs
+from .configs import load_configs
 from .losses import Losses
 from .model2d import get_model2d
+
 
 
 def dataloader(
@@ -59,7 +64,10 @@ def train_step_pi(model, loss_fn, state, optimizer,
     return new_model, new_state, weighted_loss, loss_components, weight_components, aux_vars
 
 def main():
-    configs = Configs()
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument('--configs', type=str, default='train_fno_pi', help='Configuration file for training')
+    args = arg_parser.parse_args()
+    configs = load_configs(args.configs).Configs()
     data = jnp.load(os.path.join(configs.data_dir, 
                                  "dataset_2d_complete.npz"))
     Xs = data["Xs"]  # (samples, 5, nx, ny)

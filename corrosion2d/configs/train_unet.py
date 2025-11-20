@@ -6,7 +6,7 @@ class Configs:
     DEBUG_MODE = True
 
     # Model architecture settings
-    model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
+    model_type = "unet"  # Options: 'fno', 'fcn', 'unet'
 
     in_channels = 5 # phi, c, lp, mesh, time
     out_channels = 2 # phi, c
@@ -28,7 +28,7 @@ class Configs:
     epochs = 5000
     save_every = 100
     test_every = 500
-    physical_residual = True
+    physical_residual = False
 
     save_dir = f"./corrosion2d/runs/{model_type.upper()}-PI/" \
         if physical_residual else f"./corrosion2d/runs/{model_type.upper()}/"
