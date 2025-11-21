@@ -60,31 +60,171 @@ class FDM2d:
         return d2udx2 + d2udy2
 
 
-# import jax
-# import jax.numpy as jnp
-# import equinox as eqx
+# class FDM2d:
+#     """
+#     Finite Difference Method for 2D Corrosion Modeling.
+#     4th-order accurate (O(h^4)) 5-point stencils with one-sided 5-point
+#     boundary formulas for both first and second derivatives.
+#     """
+#     @staticmethod
+#     @eqx.filter_jit
+#     def nabla(
+#         u: jnp.ndarray,
+#         dx: float,
+#         dy: float
+#     ) -> jnp.ndarray:
+#         dudx = jnp.zeros_like(u)
+#         dudy = jnp.zeros_like(u)
+
+#         # ---- x-derivative (columns) ----
+#         # interior: 5-point central (indices 2 .. -3) -> slice 2:-2
+#         # formula: (f_{i-2} - 8 f_{i-1} + 8 f_{i+1} - f_{i+2}) / (12 h)
+#         dudx = dudx.at[:, 2:-2].set(
+#             (u[:, 0:-4] - 8.0 * u[:, 1:-3] + 8.0 * u[:, 3:-1] - u[:, 4:]) / (12.0 * dx)
+#         )
+
+#         # left boundary i=0 (one-sided 5-point, 4th-order)
+#         # coeffs: [-25/12, 4, -3, 4/3, -1/4] / dx  applied to u[:,0..4]
+#         dudx = dudx.at[:, 0].set(
+#             ((-25.0/12.0) * u[:, 0] + 4.0 * u[:, 1] + (-3.0) * u[:, 2] +
+#              (4.0/3.0) * u[:, 3] + (-1.0/4.0) * u[:, 4]) / dx
+#         )
+#         # second column i=1 (one-sided with offsets [-1,0,1,2,3])
+#         # coeffs: [-1/4, -5/6, 3/2, -1/2, 1/12] / dx  applied to u[:,0..4] but mapping to [i-1..i+3]
+#         dudx = dudx.at[:, 1].set(
+#             ((-1.0/4.0) * u[:, 0] + (-5.0/6.0) * u[:, 1] + (3.0/2.0) * u[:, 2] +
+#              (-1.0/2.0) * u[:, 3] + (1.0/12.0) * u[:, 4]) / dx
+#         )
+
+#         # right boundary symmetric: i = -1 and i = -2
+#         dudx = dudx.at[:, -1].set(
+#             ((25.0/12.0) * u[:, -1] + (-4.0) * u[:, -2] + 3.0 * u[:, -3] +
+#              (-4.0/3.0) * u[:, -4] + (1.0/4.0) * u[:, -5]) / dx
+#         )
+#         # second-last column i = -2, use offsets [-3,-2,-1,0,1] relative to i=-2
+#         # coeffs for i = N-2 (derivative): [-1/12, 1/2, -3/2, 5/6, 1/4] applied to u[:, -5:-0]
+#         dudx = dudx.at[:, -2].set(
+#             ((-1.0/12.0) * u[:, -5] + (1.0/2.0) * u[:, -4] + (-3.0/2.0) * u[:, -3] +
+#              (5.0/6.0) * u[:, -2] + (1.0/4.0) * u[:, -1]) / dx
+#         )
+
+#         # ---- y-derivative (rows) ----
+#         # interior rows 2:-2
+#         dudy = dudy.at[2:-2, :].set(
+#             (u[0:-4, :] - 8.0 * u[1:-3, :] + 8.0 * u[3:-1, :] - u[4:, :]) / (12.0 * dy)
+#         )
+
+#         # top boundary j=0
+#         dudy = dudy.at[0, :].set(
+#             ((-25.0/12.0) * u[0, :] + 4.0 * u[1, :] + (-3.0) * u[2, :] +
+#              (4.0/3.0) * u[3, :] + (-1.0/4.0) * u[4, :]) / dy
+#         )
+#         # second row j=1
+#         dudy = dudy.at[1, :].set(
+#             ((-1.0/4.0) * u[0, :] + (-5.0/6.0) * u[1, :] + (3.0/2.0) * u[2, :] +
+#              (-1.0/2.0) * u[3, :] + (1.0/12.0) * u[4, :]) / dy
+#         )
+
+#         # bottom boundary symmetric j = -1 and j = -2
+#         dudy = dudy.at[-1, :].set(
+#             ((25.0/12.0) * u[-1, :] + (-4.0) * u[-2, :] + 3.0 * u[-3, :] +
+#              (-4.0/3.0) * u[-4, :] + (1.0/4.0) * u[-5, :]) / dy
+#         )
+#         dudy = dudy.at[-2, :].set(
+#             ((-1.0/12.0) * u[-5, :] + (1.0/2.0) * u[-4, :] + (-3.0/2.0) * u[-3, :] +
+#              (5.0/6.0) * u[-2, :] + (1.0/4.0) * u[-1, :]) / dy
+#         )
+
+#         return jnp.stack([dudx, dudy], axis=0)
+
+#     @staticmethod
+#     @eqx.filter_jit
+#     def laplacian(
+#         u: jnp.ndarray,
+#         dx: float,
+#         dy: float
+#     ) -> jnp.ndarray:
+#         d2udx2 = jnp.zeros_like(u)
+#         d2udy2 = jnp.zeros_like(u)
+
+#         # ---- x-second derivative ----
+#         # interior (5-point central 4th-order): (-f_{i-2} + 16 f_{i-1} - 30 f_i + 16 f_{i+1} - f_{i+2}) / (12 h^2)
+#         d2udx2 = d2udx2.at[:, 2:-2].set(
+#             (-u[:, 0:-4] + 16.0 * u[:, 1:-3] - 30.0 * u[:, 2:-2]
+#              + 16.0 * u[:, 3:-1] - u[:, 4:]) / (12.0 * dx * dx)
+#         )
+
+#         # left boundary i=0 (one-sided 5-point for second derivative)
+#         # coeffs: [35/12, -26/3, 19/2, -14/3, 11/12] / dx^2 applied to u[:,0..4]
+#         d2udx2 = d2udx2.at[:, 0].set(
+#             ((35.0/12.0) * u[:, 0] + (-26.0/3.0) * u[:, 1] + (19.0/2.0) * u[:, 2] +
+#              (-14.0/3.0) * u[:, 3] + (11.0/12.0) * u[:, 4]) / (dx * dx)
+#         )
+#         # second column i=1 (one-sided with offsets [-1,0,1,2,3])
+#         # coeffs: [11/12, -5/3, 1/2, 1/3, -1/12] / dx^2
+#         d2udx2 = d2udx2.at[:, 1].set(
+#             ((11.0/12.0) * u[:, 0] + (-5.0/3.0) * u[:, 1] + (1.0/2.0) * u[:, 2] +
+#              (1.0/3.0) * u[:, 3] + (-1.0/12.0) * u[:, 4]) / (dx * dx)
+#         )
+
+#         # right boundary symmetric for i = -1 and i = -2
+#         d2udx2 = d2udx2.at[:, -1].set(
+#             ((35.0/12.0) * u[:, -1] + (-26.0/3.0) * u[:, -2] + (19.0/2.0) * u[:, -3] +
+#              (-14.0/3.0) * u[:, -4] + (11.0/12.0) * u[:, -5]) / (dx * dx)
+#         )
+#         d2udx2 = d2udx2.at[:, -2].set(
+#             ((11.0/12.0) * u[:, -5] + (-5.0/3.0) * u[:, -4] + (1.0/2.0) * u[:, -3] +
+#              (1.0/3.0) * u[:, -2] + (-1.0/12.0) * u[:, -1]) / (dx * dx)
+#         )
+
+#         # ---- y-second derivative ----
+#         d2udy2 = d2udy2.at[2:-2, :].set(
+#             (-u[0:-4, :] + 16.0 * u[1:-3, :] - 30.0 * u[2:-2, :]
+#              + 16.0 * u[3:-1, :] - u[4:, :]) / (12.0 * dy * dy)
+#         )
+
+#         d2udy2 = d2udy2.at[0, :].set(
+#             ((35.0/12.0) * u[0, :] + (-26.0/3.0) * u[1, :] + (19.0/2.0) * u[2, :] +
+#              (-14.0/3.0) * u[3, :] + (11.0/12.0) * u[4, :]) / (dy * dy)
+#         )
+#         d2udy2 = d2udy2.at[1, :].set(
+#             ((11.0/12.0) * u[0, :] + (-5.0/3.0) * u[1, :] + (1.0/2.0) * u[2, :] +
+#              (1.0/3.0) * u[3, :] + (-1.0/12.0) * u[4, :]) / (dy * dy)
+#         )
+
+#         d2udy2 = d2udy2.at[-1, :].set(
+#             ((35.0/12.0) * u[-1, :] + (-26.0/3.0) * u[-2, :] + (19.0/2.0) * u[-3, :] +
+#              (-14.0/3.0) * u[-4, :] + (11.0/12.0) * u[-5, :]) / (dy * dy)
+#         )
+#         d2udy2 = d2udy2.at[-2, :].set(
+#             ((11.0/12.0) * u[-5, :] + (-5.0/3.0) * u[-4, :] + (1.0/2.0) * u[-3, :] +
+#              (1.0/3.0) * u[-2, :] + (-1.0/12.0) * u[-1, :]) / (dy * dy)
+#         )
+
+#         return d2udx2 + d2udy2
 
 
 # class Spectral2d:
 #     """
 #     Fourier spectral differentiation for 2D fields.
-#     Provides the same API as FDM2d but uses function-wise differentiation.
 #     """
 
 #     @staticmethod
 #     def _get_kx_ky(nx: int, ny: int, dx: float = 1.0, dy: float = 1.0):
 #         # Frequencies for FFT domain
-#         kx = jnp.fft.fftfreq(nx, d=dx) * (2 * jnp.pi)
-#         ky = jnp.fft.rfftfreq(ny, d=dy) * (2 * jnp.pi)
+#         # 在FNO模型中，我们用的是 nx, ny 的顺序
+#         # 但是在mesh中，实际上的顺序是 y, x
+#         # 所以这里的 kx, ky 实际上是对应 y 方向和 x 方向的频率
+#         kx = jnp.fft.fftfreq(nx, d=dy) * (2 * jnp.pi)
+#         ky = jnp.fft.rfftfreq(ny, d=dx) * (2 * jnp.pi)
 #         return kx, ky
 
-    
 #     # ---------------------------
 #     #       ∇u = (ux, uy)
 #     # ---------------------------
 #     @staticmethod
 #     @eqx.filter_jit
-#     def nabla(u: jnp.ndarray) -> jnp.ndarray:
+#     def nabla(u: jnp.ndarray, dx, dy) -> jnp.ndarray:
 #         """
 #         Compute gradient of u using Fourier spectral differentiation.
 #         u shape: (nx, ny) OR (channels, nx, ny)
@@ -95,7 +235,7 @@ class FDM2d:
 #             u = u[None, ...]   # add channel dim
 
 #         C, nx, ny = u.shape
-#         kx, ky = Spectral2d._get_kx_ky(nx, ny)
+#         kx, ky = Spectral2d._get_kx_ky(nx, ny, dx, dy)
 
 #         # FFT of u
 #         u_hat = jnp.fft.rfftn(u, axes=(-2, -1))           # (C, nx, ny//2+1)
@@ -105,8 +245,9 @@ class FDM2d:
 #         KY = ky.reshape(1, 1, ny//2 + 1)
 
 #         # spectral derivatives
-#         ux_hat = 1j * KX * u_hat
-#         uy_hat = 1j * KY * u_hat
+#         # KX 对应 y 方向导数，KY 对应 x 方向导数
+#         ux_hat = 1j * KY * u_hat  # du/dx uses kx (KY)
+#         uy_hat = 1j * KX * u_hat  # du/dy uses ky (KX)
 
 #         # inverse FFT to get spatial derivatives
 #         ux = jnp.fft.irfftn(ux_hat, s=(nx, ny), axes=(-2, -1))
@@ -124,7 +265,7 @@ class FDM2d:
 #     # ---------------------------
 #     @staticmethod
 #     @eqx.filter_jit
-#     def laplacian(u: jnp.ndarray) -> jnp.ndarray:
+#     def laplacian(u: jnp.ndarray, dx, dy) -> jnp.ndarray:
 #         """
 #         Compute Laplacian using Fourier spectral differentiation.
 #         u shape: (nx, ny) OR (channels, nx, ny)
@@ -135,7 +276,7 @@ class FDM2d:
 #             u = u[None, ...]
 
 #         C, nx, ny = u.shape
-#         kx, ky = Spectral2d._get_kx_ky(nx, ny)
+#         kx, ky = Spectral2d._get_kx_ky(nx, ny, dx, dy)
 
 #         u_hat = jnp.fft.rfftn(u, axes=(-2, -1))
 
@@ -264,8 +405,10 @@ class Losses:
         Neumann Boundary Condition loss for 2D corrosion modeling.
         """
         def normal_grad_penalty(u, dx, dy):
-            left = (u[:, 1] - u[:, 0])
-            right = (u[:, -1] - u[:, -2])
+            # left = (u[:, 1] - u[:, 0])
+            # right = (u[:, -1] - u[:, -2])
+            left = ( -3 * u[:, 0] + 4 * u[:, 1] - u[:, 2] ) / (2 * dx)
+            right = ( 3 * u[:, -1] - 4 * u[:, -2] + u[:, -3] ) / (2 * dx)
             return (
                 jnp.mean(left ** 2) + jnp.mean(right ** 2) 
             )
