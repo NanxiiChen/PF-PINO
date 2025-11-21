@@ -7,6 +7,7 @@ __pycache__/
 .DS_Store
 helvetica/
 data/
+train2d.sh
 
 # C extensions
 *.so
