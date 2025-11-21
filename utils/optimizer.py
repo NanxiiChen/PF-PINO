@@ -1,0 +1,539 @@
+from itertools import chain
+from typing import Any, List, NamedTuple, Optional, Union
+
+import jax
+import jax.numpy as jnp
+import jax.tree_util as jtu
+import optax
+import optax.tree_utils as otu
+from chex import Numeric
+from jaxtyping import Array
+from optax import GradientTransformation, Updates
+
+
+class SOAPState(NamedTuple):
+    count: jnp.ndarray  # type: ignore
+    exp_avg: Updates
+    exp_avg_sq: Updates
+    GG: Updates
+    Q: Updates
+
+
+def soap(
+    learning_rate: optax.ScalarOrSchedule = 3e-3,
+    b1: float = 0.95,
+    b2: float = 0.95,
+    shampoo_beta: float = -1,
+    eps: float = 1e-8,
+    weight_decay: float = 0.0,
+    precondition_frequency: int = 10,
+    max_precond_dim: int = 10000,
+    precision: jax.lax.PrecisionLike = jax.lax.Precision.HIGHEST,
+) -> optax.GradientTransformationExtraArgs:
+    """
+    Implements SOAP algorithm (https://arxiv.org/abs/2409.11321). Based on the original implementation at https://github.com/nikhilvyas/SOAP.
+
+    Args:
+        learning_rate (optax.ScalarOrSchedule): The learning rate to use.
+        b1 (float, optional): Adam's beta1 parameter. Defaults to 0.95.
+        b2 (float, optional): Adam's beta2 parameter. Defaults to 0.95.
+        shampoo_beta (float, optional): If >= 0, use this beta for the preconditioner (`L` and `R` in paper, `GG` below)
+            moving average instead of b2. Defaults to -1.
+        eps (float, optional): Adam's epsilon for numerical stability. Defaults to 1e-8.
+        weight_decay (float, optional): Weight decay coefficient. Defaults to 0.0.
+        precondition_frequency (int, optional): How often to update the preconditioner. Defaults to 10.
+        max_precond_dim (int, optional): Maximum dimension of the preconditioner.
+            Set to 10000 to exclude most common vocab sizes while including layers. Defaults to 10000.
+        precision (jax.lax.PrecisionLike, optional): Precision to use. Defaults to jax.lax.Precision.HIGHEST.
+
+    Returns:
+        optax.GradientTransformationExtraArgs: The SOAP optimizer.
+    """
+    return optax.chain(
+        scale_by_soap(
+            b1=b1,
+            b2=b2,
+            shampoo_beta=shampoo_beta,
+            eps=eps,
+            precondition_frequency=precondition_frequency,
+            max_precond_dim=max_precond_dim,
+            precision=precision,
+        ),
+        optax.add_decayed_weights(weight_decay),
+        optax.scale_by_learning_rate(learning_rate),
+    )
+
+
+def scale_by_soap(
+    b1: float = 0.95,
+    b2: float = 0.95,
+    shampoo_beta: float = -1,
+    eps: float = 1e-8,
+    precondition_frequency: int = 10,
+    max_precond_dim: int = 10000,
+    precision: jax.lax.PrecisionLike = jax.lax.Precision.HIGHEST,
+) -> GradientTransformation:
+    """
+    Implements SOAP algorithm (https://arxiv.org/abs/2409.11321). Based on the original implementation at https://github.com/nikhilvyas/SOAP.
+
+    Args:
+        b1 (float, optional): Adam's beta1 parameter. Defaults to 0.95.
+        b2 (float, optional): Adam's beta2 parameter. Defaults to 0.95.
+        shampoo_beta (float, optional): If >= 0, use this beta for the preconditioner (`L` and `R` in paper, `GG` below)
+            moving average instead of b2. Defaults to -1.
+        eps (float, optional): Adam's epsilon for numerical stability. Defaults to 1e-8.
+        precondition_frequency (int, optional): How often to update the preconditioner. Defaults to 10.
+        max_precond_dim (int, optional): Maximum dimension of the preconditioner.
+            Set to 10000 to exclude most common vocab sizes while including layers. Defaults to 10000.
+        precision (jax.lax.PrecisionLike, optional): Precision to use. Defaults to jax.lax.Precision.H
+
+    Returns:
+        optax.GradientTransformationExtraArgs: The SOAP optimizer.
+    """
+    shampoo_beta = shampoo_beta if shampoo_beta >= 0 else b2
+
+    def init_fn(params: Updates) -> SOAPState:
+        exp_avg = otu.tree_zeros_like(params)
+        exp_avg_sq = otu.tree_zeros_like(params)
+        GG = jtu.tree_map(
+            lambda p: init_conditioner(p, max_precond_dim),
+            params,
+        )
+        Q = jtu.tree_map(
+            lambda p: init_conditioner(p, max_precond_dim),
+            params,
+        )
+        return SOAPState(
+            count=jnp.zeros([], jnp.int32),
+            exp_avg=exp_avg,
+            exp_avg_sq=exp_avg_sq,
+            GG=GG,
+            Q=Q,
+        )
+
+    def init_step(
+        updates: Updates,
+        state: SOAPState,
+    ) -> tuple[Updates, SOAPState]:
+        new_GG = jtu.tree_map(
+            lambda grad, gg: update_preconditioner(grad, gg, shampoo_beta),
+            updates,
+            state.GG,
+        )
+
+        new_Q = jtu.tree_map(
+            lambda gg: get_orthogonal_matrix(gg),
+            new_GG,
+        )
+
+        # Replace updates with zeros
+        new_updates = otu.tree_zeros_like(updates)
+
+        return new_updates, state._replace(GG=new_GG, Q=new_Q)
+
+    def update_step(
+        updates: Updates,
+        state: SOAPState,
+    ) -> tuple[Updates, SOAPState]:
+        # Project gradients
+        grad_projected = jtu.tree_map(
+            lambda grad, q: project(grad, q, precision),
+            updates,
+            state.Q,
+        )
+
+        # Update moments
+        exp_avg = otu.tree_update_moment(updates, state.exp_avg, b1, 1)
+        exp_avg_sq = otu.tree_update_moment_per_elem_norm(grad_projected, state.exp_avg_sq, b2, 2)
+
+        exp_avg_projected = jtu.tree_map(
+            lambda e, q: project(e, q, precision),
+            exp_avg,
+            state.Q,
+        )
+
+        # Project back
+        norm_updates = jtu.tree_map(
+            lambda e_avg, e_avg_sq, q: project_back(e_avg / (jnp.sqrt(e_avg_sq) + eps), q, precision),
+            exp_avg_projected,
+            exp_avg_sq,
+            state.Q,
+        )
+
+        bc1 = 1 - b1**state.count
+        bc2 = 1 - b2**state.count
+        corr = jnp.sqrt(bc2) / bc1
+
+        # Bias correction on the updates
+        norm_updates = jtu.tree_map(
+            lambda p: p * corr,
+            norm_updates,
+        )
+
+        # Update the preconditioner
+        new_GG = jtu.tree_map(
+            lambda grad, gg: update_preconditioner(grad, gg, shampoo_beta, precision),
+            updates,
+            state.GG,
+        )
+
+        # Update the orthogonal matrix / exp_avg_sq
+        new_Q_and_exp_avg_sq = jax.lax.cond(
+            state.count % precondition_frequency == 0,
+            lambda: jtu.tree_map(
+                lambda e, gg, q: get_orthogonal_matrix_QR(gg, q, e, precision),
+                exp_avg_sq,
+                new_GG,
+                state.Q,
+            ),
+            lambda: jtu.tree_map(
+                lambda e, q: (q, e),
+                state.exp_avg_sq,
+                state.Q,
+            ),
+        )
+        ## Unpack the results
+        new_Q = jtu.tree_map(
+            lambda _, x: x[0],
+            updates,
+            new_Q_and_exp_avg_sq,
+        )
+        exp_avg_sq = jtu.tree_map(
+            lambda _, x: x[1],
+            updates,
+            new_Q_and_exp_avg_sq,
+        )
+
+        new_state = SOAPState(
+            count=state.count,
+            exp_avg=exp_avg,
+            exp_avg_sq=exp_avg_sq,
+            GG=new_GG,
+            Q=new_Q,
+        )
+
+        return norm_updates, new_state
+
+    def update_fn(updates: Updates, state: SOAPState, params: Optional[Updates] = None) -> tuple[Updates, SOAPState]:
+        del params
+        count_inc = jnp.asarray(optax.safe_int32_increment(state.count))
+        state = state._replace(count=count_inc)
+
+        updates, new_state = jax.lax.cond(
+            count_inc == 1,
+            lambda: init_step(updates, state),
+            lambda: update_step(updates, state),
+        )
+
+        return updates, new_state
+
+    return optax.GradientTransformation(init_fn, update_fn)  # type: ignore
+
+
+def update_preconditioner(
+    grad: Array,
+    GG: List[Union[Array, None]],
+    beta: float,
+    precision: jax.lax.PrecisionLike = jax.lax.Precision.HIGHEST,
+) -> List[Union[Array, None]]:
+    if grad.ndim == 1:
+        return [lerp(GG[0], jnp.matmul(grad[:, None], grad[None, :], precision=precision), 1 - beta)]  # type: ignore
+
+    new_GG = []
+    for idx, gg in enumerate(GG):
+        if gg is None:
+            new_GG.append(None)
+            continue
+
+        outer_product = jnp.tensordot(
+            grad,
+            grad,
+            axes=[[*chain(range(idx), range(idx + 1, len(grad.shape)))]] * 2,
+            precision=precision,
+        )
+        new_GG.append(lerp(gg, outer_product, 1 - beta))
+
+    return new_GG
+
+
+def project(
+    grad: Array,
+    Q: List[Union[Array, None]],
+    precision: jax.lax.PrecisionLike = jax.lax.Precision.HIGHEST,
+) -> Array:
+    for mat in Q:
+        if mat is not None:  # noqa: SIM108
+            grad = jnp.tensordot(
+                grad,
+                mat,
+                axes=((0,), (0,)),
+                precision=precision,
+            )
+        else:
+            permute_order = list(range(1, len(grad.shape))) + [0]
+            grad = jnp.transpose(grad, permute_order)
+
+    return grad
+
+
+def project_back(
+    grad: Array,
+    Q: List[Union[Array, None]],
+    precision: jax.lax.PrecisionLike = jax.lax.Precision.HIGHEST,
+) -> Array:
+    for mat in Q:
+        if mat is not None:  # noqa: SIM108
+            grad = jnp.tensordot(
+                grad,
+                mat,
+                axes=((0,), (1,)),
+                precision=precision,
+            )
+        else:
+            grad = jnp.moveaxis(grad, 0, -1)
+
+    return grad
+
+
+def get_orthogonal_matrix(gg: Array) -> Union[Array, None]:
+    if gg is None:
+        return None
+
+    _, eigh = jnp.linalg.eigh(gg + 1e-30 * jnp.eye(gg.shape[0]))
+    return jnp.flip(eigh, axis=1)
+
+
+def get_orthogonal_matrix_QR(
+    GG: List[Union[Array, None]],
+    Q: List[Union[Array, None]],
+    exp_avg_sq: Array,
+    precision: jax.lax.PrecisionLike = jax.lax.Precision.HIGHEST,
+) -> tuple[List[Union[Array, None]], Array]:
+    final_Q = []
+    for ind, (m, o) in enumerate(zip(GG, Q)):
+        if m is None or o is None:
+            final_Q.append(None)
+            continue
+
+        est_eig = jnp.diag(
+            jnp.matmul(
+                jnp.matmul(o.T, m, precision=precision),
+                o,
+                precision=precision,
+            )
+        )
+        sort_idx = jnp.argsort(est_eig, descending=True)
+        exp_avg_sq = jnp.take(exp_avg_sq, sort_idx, axis=ind)
+        o = o[:, sort_idx]
+        power_iter = jnp.matmul(m, o, precision=precision)
+        Q_new, _ = jnp.linalg.qr(power_iter)
+
+        final_Q.append(Q_new)
+
+    return final_Q, exp_avg_sq
+
+
+def lerp(
+    start: Array,
+    end: Array,
+    weight: Numeric,
+):
+    return start + weight * (end - start)
+
+
+def init_conditioner(p: Array, max_precond_dim: int) -> List[Union[Array, None]]:
+    if p.ndim == 1:
+        return [jnp.zeros((p.shape[0], p.shape[0]))]
+
+    return [jnp.zeros((s, s)) if s <= max_precond_dim else None for s in p.shape]
+
+
+
+
+class RPROPState(NamedTuple):
+    """RPROP优化器的状态"""
+    step_sizes: Any  # 每个参数的当前步长
+    prev_grads: Any  # 前一步的梯度
+    step: int  # 当前训练步数
+
+
+def rprop(
+    init_step_size: float = 1e-3,
+    eta_plus: float = 1.2,
+    eta_minus: float = 0.5,
+    step_size_min: float = 1e-6,
+    step_size_max: float = 50.0,
+) -> optax.GradientTransformation:
+    """RPROP (Resilient Backpropagation) 优化器。"""
+    
+    def init_fn(params):
+        step_sizes = jax.tree_map(lambda p: jnp.ones_like(p) * init_step_size, params)
+        prev_grads = jax.tree_map(jnp.zeros_like, params)
+        return RPROPState(step_sizes=step_sizes, prev_grads=prev_grads, step=0)
+    
+    def first_step(args):
+        grads, state = args
+        # 仅使用符号更新，步长保持不变
+        updates = jax.tree_map(
+            lambda g, s: -jnp.sign(g) * s,
+            grads, state.step_sizes
+        )
+        return updates, state.step_sizes
+    
+    def later_steps(args):
+        grads, state = args
+        # 计算梯度符号乘积
+        sign_products = jax.tree_map(
+            lambda g, pg: g * pg,
+            grads, state.prev_grads
+        )
+        
+        # 更新步长
+        new_step_sizes = jax.tree_map(
+            lambda sp, s: jnp.where(
+                sp > 0,  # 符号相同，增加步长
+                jnp.minimum(s * eta_plus, step_size_max),
+                jnp.where(
+                    sp < 0,  # 符号相反，减少步长
+                    jnp.maximum(s * eta_minus, step_size_min),
+                    s  # 梯度为零，保持步长不变
+                )
+            ),
+            sign_products, state.step_sizes
+        )
+        
+        # 当符号改变时，梯度置为0（防止振荡）
+        effective_grads = jax.tree_map(
+            lambda g, sp: jnp.where(sp < 0, 0.0, g),
+            grads, sign_products
+        )
+        
+        # 计算更新
+        updates = jax.tree_map(
+            lambda g, s: -jnp.sign(g) * s,
+            effective_grads, new_step_sizes
+        )
+        
+        return updates, new_step_sizes
+    
+    def update_fn(grads, state, params=None):
+        # 使用jax.lax.cond代替if/else
+        updates, new_step_sizes = jax.lax.cond(
+            state.step == 0,
+            first_step,
+            later_steps,
+            (grads, state)
+        )
+        
+        # 更新状态
+        new_state = RPROPState(
+            step_sizes=new_step_sizes,
+            prev_grads=grads,
+            step=state.step + 1
+        )
+        
+        return updates, new_state
+    
+    return optax.GradientTransformation(init_fn, update_fn)
+
+
+
+from functools import partial
+from typing import Any, Callable, Optional, Tuple
+
+from jaxopt import LBFGS as JaxoptLBFGS
+
+
+class LBFGSState(NamedTuple):
+    """LBFGS优化器的状态"""
+    value_fun: Any  # 值函数
+    grad_fun: Any   # 梯度函数
+    solver: Any     # LBFGS求解器
+    step: int       # 当前步数
+    params: Any     # 当前参数（用于存储最后一次优化的结果）
+    aux: Any        # 辅助数据
+
+
+def lbfgs(
+    maxiter: int = 20,
+    history_size: int = 10,
+    tol: float = 1e-3,
+    line_search: str = "zoom",
+    verbose: bool = False,
+) -> optax.GradientTransformation:
+    """LBFGS (Limited-memory BFGS) 优化器。
+    
+    Args:
+        maxiter: 每次更新的最大迭代次数
+        history_size: 历史梯度和位移的存储数量
+        tol: 收敛容差
+        line_search: 线搜索方法，可选 "zoom", "backtracking"
+        verbose: 是否打印优化过程信息
+    
+    Returns:
+        optax.GradientTransformation: LBFGS优化器
+    """
+    
+    def init_fn(params):
+        # 初始化状态
+        # 注意：实际的求解器会在第一次update时创建
+        return LBFGSState(
+            value_fun=None,
+            grad_fun=None,
+            solver=None,
+            step=0,
+            params=params,
+            aux=None
+        )
+    
+    def update_fn(grads, state, params=None, **kwargs):
+        # LBFGS需要值函数和梯度函数
+        # 这些应该作为kwargs提供
+        value_fun = kwargs.get("value_fun", state.value_fun)
+        grad_fun = kwargs.get("grad_fun", state.grad_fun)
+        
+        if value_fun is None or grad_fun is None:
+            # 如果没有提供值函数或梯度函数，返回零更新
+            return jax.tree_map(jnp.zeros_like, params), state._replace(params=params)
+        
+        # 创建值和梯度函数
+        def value_and_grad_fn(params):
+            value = value_fun(params)
+            grads = grad_fun(params)
+            return value, grads
+        
+        # 第一次调用时创建求解器
+        solver = state.solver
+        if solver is None:
+            solver = JaxoptLBFGS(
+                fun=value_and_grad_fn,
+                value_and_grad=True,
+                maxiter=maxiter,
+                tol=tol,
+                history_size=history_size,
+                linesearch=line_search,
+                verbose=verbose
+            )
+        
+        # 运行LBFGS优化
+        new_params, solver_state = solver.run(params)
+        
+        # 计算更新
+        updates = jax.tree_map(
+            lambda new_p, p: new_p - p, 
+            new_params, params
+        )
+        
+        # 更新状态
+        new_state = LBFGSState(
+            value_fun=value_fun,
+            grad_fun=grad_fun,
+            solver=solver,
+            step=state.step + 1,
+            params=new_params,
+            aux=solver_state
+        )
+        
+        return updates, new_state
+    
+    return optax.GradientTransformationExtraArgs(init_fn, update_fn)

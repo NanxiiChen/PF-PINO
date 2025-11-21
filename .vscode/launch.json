@@ -21,7 +21,7 @@
             "module": "corrosion2d.train",
             "args": [
                 "--configs",
-                "train_fno_pi"
+                "train_debug"
             ]
         }
     ]

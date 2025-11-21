@@ -24,12 +24,14 @@ class FDM2d:
         dudy = jnp.zeros_like(u)
 
         dudx = dudx.at[:, 1:-1].set((u[:, 2:] - u[:, :-2]) / (2 * dx))
-        dudx = dudx.at[:, 0].set((u[:, 1] - u[:, 0]) / dx)
-        dudx = dudx.at[:, -1].set((u[:, -1] - u[:, -2]) / dx)
-
         dudy = dudy.at[1:-1, :].set((u[2:, :] - u[:-2, :]) / (2 * dy))
-        dudy = dudy.at[0, :].set((u[1, :] - u[0, :]) / dy)
-        dudy = dudy.at[-1, :].set((u[-1, :] - u[-2, :]) / dy)
+
+        dudx = dudx.at[:, 0].set((-3*u[:, 0] + 4*u[:, 1] - u[:, 2]) / (2*dx))
+        dudx = dudx.at[:, -1].set((3*u[:, -1] - 4*u[:, -2] + u[:, -3]) / (2*dx))
+
+        dudy = dudy.at[0, :].set((-3*u[0, :] + 4*u[1, :] - u[2, :]) / (2*dy))
+        dudy = dudy.at[-1, :].set((3*u[-1, :] - 4*u[-2, :] + u[-3, :]) / (2*dy))
+
 
         return jnp.stack([dudx, dudy], axis=0)
     
@@ -56,6 +58,100 @@ class FDM2d:
         d2udy2 = d2udy2.at[-1, :].set((2.0*u[-1, :] - 5.0*u[-2, :] + 4.0*u[-3, :] - u[-4, :]) / (dy ** 2))
 
         return d2udx2 + d2udy2
+
+
+# import jax
+# import jax.numpy as jnp
+# import equinox as eqx
+
+
+# class Spectral2d:
+#     """
+#     Fourier spectral differentiation for 2D fields.
+#     Provides the same API as FDM2d but uses function-wise differentiation.
+#     """
+
+#     @staticmethod
+#     def _get_kx_ky(nx: int, ny: int, dx: float = 1.0, dy: float = 1.0):
+#         # Frequencies for FFT domain
+#         kx = jnp.fft.fftfreq(nx, d=dx) * (2 * jnp.pi)
+#         ky = jnp.fft.rfftfreq(ny, d=dy) * (2 * jnp.pi)
+#         return kx, ky
+
+    
+#     # ---------------------------
+#     #       ∇u = (ux, uy)
+#     # ---------------------------
+#     @staticmethod
+#     @eqx.filter_jit
+#     def nabla(u: jnp.ndarray) -> jnp.ndarray:
+#         """
+#         Compute gradient of u using Fourier spectral differentiation.
+#         u shape: (nx, ny) OR (channels, nx, ny)
+#         Returns: (2, nx, ny)   # [ux, uy]
+#         """
+#         # Support both single-field and multi-channel input
+#         if u.ndim == 2:
+#             u = u[None, ...]   # add channel dim
+
+#         C, nx, ny = u.shape
+#         kx, ky = Spectral2d._get_kx_ky(nx, ny)
+
+#         # FFT of u
+#         u_hat = jnp.fft.rfftn(u, axes=(-2, -1))           # (C, nx, ny//2+1)
+
+#         # reshape frequency grids
+#         KX = kx.reshape(1, nx, 1)
+#         KY = ky.reshape(1, 1, ny//2 + 1)
+
+#         # spectral derivatives
+#         ux_hat = 1j * KX * u_hat
+#         uy_hat = 1j * KY * u_hat
+
+#         # inverse FFT to get spatial derivatives
+#         ux = jnp.fft.irfftn(ux_hat, s=(nx, ny), axes=(-2, -1))
+#         uy = jnp.fft.irfftn(uy_hat, s=(nx, ny), axes=(-2, -1))
+
+#         # Return (2, nx, ny) regardless of channels
+#         if C == 1:
+#             return jnp.stack([ux[0], uy[0]], axis=0)
+#         else:
+#             return jnp.stack([ux, uy], axis=0)    # shape (2, C, nx, ny)
+
+
+#     # ---------------------------
+#     #       ∇²u = u_xx + u_yy
+#     # ---------------------------
+#     @staticmethod
+#     @eqx.filter_jit
+#     def laplacian(u: jnp.ndarray) -> jnp.ndarray:
+#         """
+#         Compute Laplacian using Fourier spectral differentiation.
+#         u shape: (nx, ny) OR (channels, nx, ny)
+#         Returns: (nx, ny) OR (channels, nx, ny)
+#         """
+#         # Normalize shape
+#         if u.ndim == 2:
+#             u = u[None, ...]
+
+#         C, nx, ny = u.shape
+#         kx, ky = Spectral2d._get_kx_ky(nx, ny)
+
+#         u_hat = jnp.fft.rfftn(u, axes=(-2, -1))
+
+#         KX = kx.reshape(1, nx, 1)
+#         KY = ky.reshape(1, 1, ny//2 + 1)
+
+#         lap_hat = -(KX**2 + KY**2) * u_hat
+
+#         lap = jnp.fft.irfftn(lap_hat, s=(nx, ny), axes=(-2, -1))
+
+#         if C == 1:
+#             return lap[0]
+#         return lap
+
+
+
 
 class Losses:
 

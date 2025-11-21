@@ -65,7 +65,8 @@ def train_step_pi(model, loss_fn, state, optimizer,
 
 def main():
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument('--configs', type=str, default='train_fno_pi', help='Configuration file for training')
+    arg_parser.add_argument('--configs', type=str, default='train_debug', 
+                            help='Configuration file for training')
     args = arg_parser.parse_args()
     configs = load_configs(args.configs).Configs()
     data = jnp.load(os.path.join(configs.data_dir, 
@@ -108,13 +109,13 @@ def main():
     losses = Losses()
     loss_fn = losses.pi_loss if configs.physical_residual else losses.mse_loss
 
-    schedualer = optax.exponential_decay(
+    scheduler = optax.exponential_decay(
         init_value=configs.learning_rate,
         transition_steps=configs.decay_every,
         decay_rate=configs.decay_rate,
         end_value=configs.end_value,
     )
-    optimizer = optax.adam(schedualer)
+    optimizer = optax.adam(scheduler)
     opt_state = optimizer.init(eqx.filter(model, eqx.is_array))
 
     batch_size = configs.batch_size
