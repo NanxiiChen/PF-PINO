@@ -27,10 +27,8 @@ class FDM1D:
         """
         dudx = jnp.zeros_like(u)
         dudx = dudx.at[1:-1].set((u[2:] - u[:-2]) / (2 * dx))
-        # Forward difference at the first point
-        dudx = dudx.at[0].set((u[1] - u[0]) / dx)
-        # Backward difference at the last point
-        dudx = dudx.at[-1].set((u[-1] - u[-2]) / dx)
+        dudx = dudx.at[0].set((-3 * u[0] + 4 * u[1] - u[2]) / (2 * dx))
+        dudx = dudx.at[-1].set((3 * u[-1] - 4 * u[-2] + u[-3]) / (2 * dx))
         return dudx
     
     @staticmethod

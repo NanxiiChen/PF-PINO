@@ -174,11 +174,7 @@ def main():
                 f"Train Loss = {train_loss_epoch:.3e}, "
                 f"Valid Loss = {val_loss_epoch:.3e}"
             )
-            
-            eqx.tree_serialise_leaves(
-                os.path.join(savedir, f"epoch_{epoch}.eqx"),
-                model)
-            
+
         if epoch % configs.test_every == 0 or epoch == configs.epochs - 1:
             test_solutions = jnp.load(os.path.join(configs.test_data_dir, "solutions.npy"))[:, :, :, ::-1]
             test_lp_values = jnp.load(os.path.join(configs.test_data_dir, "Lp_values.npy")).reshape(-1, 1)
@@ -206,6 +202,11 @@ def main():
             print(f"Test MSE at epoch {epoch}: {test_mse:.3e}")
             with open(os.path.join(savedir, "test_logs.csv"), "a") as f:
                 f.write(f"{epoch},{test_mse}\n")
+
+            eqx.tree_serialise_leaves(
+                os.path.join(savedir, f"epoch_{epoch}.eqx"),
+                model)
+            
 
 if __name__ == "__main__":
     main()
