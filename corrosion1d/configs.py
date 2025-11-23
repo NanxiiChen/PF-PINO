@@ -6,13 +6,13 @@ class Configs:
     DEBUG_MODE = True
     
     # Model architecture settings
-    model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
+    model_type = "FNO"  # Options: 'fno', 'fcn', 'unet'
     
     in_channels = 5 # phi, c, lp, mesh, time
     out_channels = 2 # phi, c
     modes = 8
-    width = 64 if model_type != "unet" else 32
-    depth = 4 if model_type != "unet" else 2
+    width = 64
+    depth = 4
     activation = "gelu"
 
     
