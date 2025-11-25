@@ -1,26 +1,45 @@
 from dolfin import *
 import numpy as np
-import matplotlib.pyplot as plt
 import time
 import os
 
+# 优化编译器参数
+parameters["form_compiler"]["optimize"] = True
+parameters["form_compiler"]["cpp_optimize"] = True
 set_log_level(LogLevel.ERROR)
 
-# ==================== 参数设置（Example 5.3）====================
-# 模型参数
-rho_val = 1e3        # ϱ(φ) - 迁移率倒数（这里取常数）
-eps = 0.015          # ε - 界面宽度
-sigma = 0.1          # σ - 各向异性强度
-lam = 4e2            # λ - 动力学系数
-D_val = 2.5e-3       # D - 热扩散系数
-K_val = 1.2          # K - 潜热系数
+# ==================== 模式设置 ====================
+# mode = 'train_valid'
+mode = 'test'
 
-# 数值参数
-Nx, Ny = 128, 128    # 网格分辨率
-T_final = 10        # 终止时间
-dt = 0.005           # 时间步长（直接法需要小步长）
+if mode == 'train_valid':
+    K_values = [0.6, 0.8, 1.0, 1.2]
+    save_dir = './solidification/data/train_valid'
+elif mode == 'test':
+    K_values = [0.7, 0.9, 1.1]
+    save_dir = './solidification/data/test'
+else:
+    raise ValueError("Invalid mode")
+
+if not os.path.exists(save_dir):
+    os.makedirs(save_dir)
+K_values = np.array(K_values)
+np.save(f'{save_dir}/K_values.npy', K_values)
+
+# ==================== 参数设置 ====================
+# 模型参数 (保持不变)
+rho_val = 1e3        
+eps = 0.015          
+sigma = 0.1          
+lam = 4e2            
+D_val = 2.5e-3       
+# K_val 将在循环中动态赋值
+
+# 数值参数 (保持不变)
+Nx, Ny = 128, 128    
+T_final = 8        
+dt = 0.05           
 num_steps = int(T_final / dt)
-save_interval = 10
 
 # 初始条件参数
 r0 = 0.05
@@ -31,24 +50,29 @@ eps0 = eps
 mesh = RectangleMesh(Point(-1, -1), Point(1, 1), Nx, Ny, 'crossed')
 V = FunctionSpace(mesh, 'P', 1)
 
-print(f"自由度: {V.dim()}")
-print(f"时间步长: {dt}, 总步数: {num_steps}")
+# 保存网格节点坐标（原始DOF坐标）
+mesh_points = V.tabulate_dof_coordinates()
+print(f"Mesh points shape: {mesh_points.shape}")
+np.save(f'{save_dir}/mesh_points.npy', mesh_points)
+
+# 生成规则网格坐标（仿照corrosion2d方法）
+x_coords = np.linspace(-1, 1, Nx + 1)
+y_coords = np.linspace(-1, 1, Ny + 1)
+X, Y = np.meshgrid(x_coords, y_coords, indexing='xy')
+grid_points = np.vstack([X.ravel(), Y.ravel()]).T
+# 保存规则网格坐标
+np.save(f'{save_dir}/mesh_grid_coords.npy', grid_points.reshape((Ny + 1, Nx + 1, 2)))
+
+num_points = mesh_points.shape[0]
+num_grid_points = grid_points.shape[0]
 
 # ==================== 函数定义 ====================
-# 当前时刻
 phi = Function(V)
 T_var = Function(V)
-
-# [新增] 显式重命名，防止出现 f_11, f_5 这种名字
-phi.rename("phi", "phase field")
-T_var.rename("T", "temperature")
-
-# 上一时刻
 phi_n = Function(V)
 T_n = Function(V)
 
-
-# ==================== 初始条件 ====================
+# ==================== 初始条件表达式 ====================
 class PhiInitial(UserExpression):
     def eval(self, values, x):
         r = np.sqrt((x[0]-x0)**2 + (x[1]-y0)**2)
@@ -63,33 +87,16 @@ class TInitial(UserExpression):
         else:
             values[0] = -0.6
 
-phi_n.interpolate(PhiInitial(degree=2))
-T_n.interpolate(TInitial(degree=2))
-
 # ==================== 模型函数 ====================
 def F_potential(phi):
-    """F(φ) = (φ² - 1)² / 4"""
     return 0.25 * (phi**2 - 1)**2
 
-def F_prime(phi):
-    """F'(φ) = φ³ - φ"""
-    return phi**3 - phi
-
-def h_func(phi):
-    """h(φ) = φ⁵/5 - 2φ³/3 + φ"""
-    return phi**5 / 5.0 - 2.0 * phi**3 / 3.0 + phi
-
 def h_prime(phi):
-    """h'(φ) = φ⁴ - 2φ² + 1"""
     return phi**4 - 2*phi**2 + 1
 
 def kappa(grad_phi):
-    """各向异性系数 κ(∇φ) = 1 + σ·cos(4θ)"""
     eps_reg = 1e-12
     phi_x, phi_y = grad_phi[0], grad_phi[1]
-    # cos(2θ) = (φ_x² - φ_y²) / |∇φ|²
-    # sin(2θ) = 2φ_xφ_y / |∇φ|²
-    # cos(4θ) = cos²(2θ) - sin²(2θ)
     norm_sq = phi_x**2 + phi_y**2 + eps_reg
     cos2theta = (phi_x**2 - phi_y**2) / norm_sq
     sin2theta = 2 * phi_x * phi_y / norm_sq
@@ -97,11 +104,6 @@ def kappa(grad_phi):
     return 1 + sigma * cos4theta
 
 def compute_H(grad_phi):
-    """
-    H(∇φ) = δℒ/δφ，其中 ℒ = ∫ κ(∇φ) dΩ
-    对于 m=4:
-    H = 4σ·4/|∇φ|⁶ · (φ_x(φ_x²φ_y² - φ_y⁴), φ_y(φ_y²φ_x² - φ_x⁴))
-    """
     phi_x, phi_y = grad_phi[0], grad_phi[1]
     norm6 = (phi_x**2 + phi_y**2)**3 + 1e-18
     coef = 16.0 * sigma / norm6
@@ -109,44 +111,19 @@ def compute_H(grad_phi):
     Hy = coef * phi_y * (phi_y**2 * phi_x**2 - phi_x**4)
     return as_vector((Hx, Hy))
 
-# ==================== 求解器：直接求解方程(2.1)和(2.2) ====================
-
-def solve_direct():
-    """
-    直接求解原始方程：
-    方程(2.1): ϱ(φ)·∂φ/∂t = -δE/δφ - (λ/ε)h'(φ)T
-    方程(2.2): ∂T/∂t = ∇·(D∇T) + K·h'(φ)·∂φ/∂t
-    
-    使用隐式时间离散
-    """
-    
-    # 测试函数
+# ==================== 求解器 ====================
+# 注意：这里需要传入当前的 K_val
+def solve_direct(current_K):
     v_phi = TestFunction(V)
     v_T = TestFunction(V)
-    
-    # 试探函数
     phi_trial = TrialFunction(V)
     T_trial = TrialFunction(V)
-    
-    # ==================== 方程(2.1)的弱形式 ====================
-    # ϱ(φⁿ)·(φⁿ⁺¹ - φⁿ)/dt = -δE/δφ|_{φⁿ⁺¹} - (λ/ε)h'(φⁿ)Tⁿ
-    
-    # δE/δφ = -∇·[κ²(∇φ)∇φ + κ(∇φ)|∇φ|²H(φ)] + f(φ)/ε²
-    
-    # 使用半隐式：φⁿ⁺¹的线性项隐式，非线性项显式
-    # 简化：用φⁿ计算κ, H, f等非线性项
     
     grad_phi_n = grad(phi_n)
     kappa_n = kappa(grad_phi_n)
     H_n = compute_H(grad_phi_n)
     
-    # 弱形式（分部积分）：
-    # ∫ ϱ(φⁿ)·(φⁿ⁺¹ - φⁿ)/dt·v dΩ
-    # + ∫ [κ²(∇φⁿ)∇φⁿ⁺¹ + κ(∇φⁿ)|∇φⁿ|²H(φⁿ)]·∇v dΩ
-    # + ∫ f(φⁿ)/ε²·v dΩ
-    # + ∫ (λ/ε)h'(φⁿ)Tⁿ·v dΩ = 0
-    
-    # 为了稳定性，对梯度项用半隐式
+    # 方程 1: Phase Field
     df_dphi_semi = (phi_n**2 - 1) * phi_trial
     F_phi = (
         rho_val * (phi_trial - phi_n) / dt * v_phi * dx
@@ -156,127 +133,96 @@ def solve_direct():
         + (lam / eps) * h_prime(phi_n) * T_n * v_phi * dx
     )
     
-    # 提取双线性和线性部分
-    a_phi = lhs(F_phi)
-    L_phi = rhs(F_phi)
+    solve(lhs(F_phi) == rhs(F_phi), phi, 
+          solver_parameters={"linear_solver": "gmres", "preconditioner": "ilu"})
     
-    # 求解 φⁿ⁺¹
-    solve(a_phi == L_phi, phi, [])
-    
-    
-    # ==================== 方程(2.2)的弱形式 ====================
-    # ∂T/∂t = D·ΔT + K·h'(φ)·∂φ/∂t
-    # (Tⁿ⁺¹ - Tⁿ)/dt = D·ΔTⁿ⁺¹ + K·h'(φⁿ)·(φⁿ⁺¹ - φⁿ)/dt
-    
-    # 弱形式：
-    # ∫ (Tⁿ⁺¹ - Tⁿ)/dt·v dΩ
-    # + ∫ D·∇Tⁿ⁺¹·∇v dΩ
-    # - ∫ K·h'(φⁿ)·(φⁿ⁺¹ - φⁿ)/dt·v dΩ = 0
-    
+    # 方程 2: Temperature (使用传入的 current_K)
     F_T = (
         (T_trial - T_n) / dt * v_T * dx
         + D_val * dot(grad(T_trial), grad(v_T)) * dx
-        - K_val * h_prime(phi_n) * (phi - phi_n) / dt * v_T * dx
+        - current_K * h_prime(phi_n) * (phi - phi_n) / dt * v_T * dx
     )
     
-    a_T = lhs(F_T)
-    L_T = rhs(F_T)
-    
-    # 求解 Tⁿ⁺¹
-    solve(a_T == L_T, T_var, [])
+    solve(lhs(F_T) == rhs(F_T), T_var, 
+          solver_parameters={"linear_solver": "gmres", "preconditioner": "ilu"})
     
     return phi, T_var
 
-
-# ==================== 计算能量 ====================
-def compute_energy():
-    """计算总能量 E(φ,T) = ∫[½κ²|∇φ|² + F(φ)/ε² + λT²/(2εK)] dΩ"""
-    grad_phi_n = grad(phi_n)
-    kappa_n = kappa(grad_phi_n)
-    
-    energy = assemble(
-        (0.5 * kappa_n**2 * dot(grad_phi_n, grad_phi_n) 
-         + F_potential(phi_n) / eps**2
-         + lam * T_n**2 / (2 * eps * K_val)) * dx
-    )
-    return energy
-
-
-# ==================== 时间步进循环 ====================
-print("="*70)
-print("开始直接求解方程(2.1)和(2.2)...")
-print("="*70)
-
-# 创建输出文件夹
-os.makedirs("results", exist_ok=True)
-
-phi_file = File("results/phi.pvd")
-T_file = File("results/temperature.pvd")
-
-t = 0.0
-start_time = time.time()
-
-# [修改] 保存初始状态时，先将值赋给主变量，保证变量名一致
-phi.assign(phi_n)
-T_var.assign(T_n)
-
-phi_file << (phi, t)      # 原来是 phi_n
-T_file << (T_var, t)      # 原来是 T_n
-
-energies = [compute_energy()]
-times = [0.0]
-
-for n in range(num_steps):
-    t += dt
-    
-    # 求解当前步
-    phi, T_var = solve_direct()
-    
-    # 计算能量
-    energy = compute_energy()
-    energies.append(energy)
-    times.append(t)
-    
-    # 输出信息
-    if n % 10 == 0:
-        elapsed = time.time() - start_time
-        phi_min, phi_max = phi.vector().min(), phi.vector().max()
-        T_min, T_max = T_var.vector().min(), T_var.vector().max()
-        print(f"步数 {n:4d}/{num_steps}, t={t:.4f}, "
-              f"E={energy:.6e}, "
-              f"φ∈[{phi_min:.3f},{phi_max:.3f}], "
-              f"T∈[{T_min:.3f},{T_max:.3f}], "
-              f"耗时={elapsed:.1f}s")
-    
-    # 更新历史值
-    phi_n.assign(phi)
-    T_n.assign(T_var)
-    
-    # 保存结果
-    if n % save_interval == 0:
-        phi_file << (phi, t)
-        T_file << (T_var, t)
+# ==================== 主循环 ====================
+# 初始化结果数组: [num_K, num_time_steps, num_vars, num_nodes]
+# num_vars = 2 (phi, T)
+results = np.zeros((len(K_values), num_steps + 1, 2, num_points))
+# 添加规则网格结果数组: [num_K, num_time_steps, num_vars, ny+1, nx+1]
+results_grid = np.zeros((len(K_values), num_steps + 1, 2, Ny + 1, Nx + 1))
+times = np.linspace(0, T_final, num_steps + 1)
 
 print("="*70)
-print("计算完成！")
-print(f"总耗时: {time.time() - start_time:.2f}s")
+print(f"开始计算 Mode: {mode}")
+print(f"K values: {K_values}")
+print(f"Results shape: {results.shape}")
+print(f"Results grid shape: {results_grid.shape}")
+print("="*70)
 
-# ==================== 绘制能量演化 ====================
-plt.figure(figsize=(10, 6))
-plt.plot(times, energies, 'b-', linewidth=2)
-plt.xlabel('Time', fontsize=14)
-plt.ylabel('Energy E(φ,T)', fontsize=14)
-plt.title('Energy Dissipation', fontsize=16)
-plt.grid(True, alpha=0.3)
-plt.savefig('results/energy.png', dpi=150, bbox_inches='tight')
-print("能量曲线已保存到 results/energy.png")
+total_start_time = time.time()
 
-# 检查能量是否单调递减
-energy_diff = np.diff(energies)
-if np.all(energy_diff <= 1e-10):
-    print("✓ 能量单调递减（数值稳定）")
-else:
-    n_increase = np.sum(energy_diff > 1e-10)
-    print(f"✗ 能量有 {n_increase} 次上升（可能需要减小时间步长）")
+for k_idx, K_val in enumerate(K_values):
+    print(f"\nStarting simulation with K = {K_val} ({k_idx+1}/{len(K_values)})")
+    
+    # 1. 重置初始条件
+    phi_n.interpolate(PhiInitial(degree=2))
+    T_n.interpolate(TInitial(degree=2))
+    
+    # 2. 存储初始时刻 (t=0)
+    phi_vec = phi_n.vector().get_local()
+    T_vec = T_n.vector().get_local()
+    results[k_idx, 0, 0, :] = phi_vec
+    results[k_idx, 0, 1, :] = T_vec
+    
+    # 在规则网格上采样初始条件并存储
+    sampled_init = np.array([(phi_n(float(px), float(py)), T_n(float(px), float(py))) for px, py in grid_points])
+    # sampled_init shape -> (num_grid, 2) ; reshape to (2, ny+1, nx+1)
+    results_grid[k_idx, 0] = sampled_init.reshape((Ny + 1, Nx + 1, 2)).transpose(2, 0, 1)
+    
+    # 3. 时间步进
+    t = 0.0
+    case_start_time = time.time()
+    
+    for n in range(num_steps):
+        t += dt
+        
+        # 求解
+        phi, T_var = solve_direct(K_val)
+        
+        # 存储结果
+        phi_vec = phi.vector().get_local()
+        T_vec = T_var.vector().get_local()
+        results[k_idx, n + 1, 0, :] = phi_vec
+        results[k_idx, n + 1, 1, :] = T_vec
+        
+        # 在规则网格上采样解决方案并存储
+        sampled = np.array([(phi(float(px), float(py)), T_var(float(px), float(py))) for px, py in grid_points])
+        # sampled.shape == (num_grid, 2)
+        results_grid[k_idx, n + 1] = sampled.reshape((Ny + 1, Nx + 1, 2)).transpose(2, 0, 1)
+        
+        # 更新历史值
+        phi_n.assign(phi)
+        T_n.assign(T_var)
+        
+        # 打印进度
+        if (n + 1) % 50 == 0:
+            print(f"  Step {n+1}/{num_steps}, t={t:.3f}")
 
-plt.show()
+    print(f"Completed K = {K_val}, Time: {time.time() - case_start_time:.1f}s")
+
+# ==================== 保存结果 ====================
+print("="*70)
+print("Saving results...")
+
+np.save(f'{save_dir}/solutions.npy', results)
+np.save(f'{save_dir}/solutions_grid.npy', results_grid)
+np.save(f'{save_dir}/K_values.npy', K_values)
+np.save(f'{save_dir}/times.npy', times)
+
+print(f"Results saved to {save_dir}")
+print(f"Original solutions shape: {results.shape}")
+print(f"Grid solutions shape: {results_grid.shape}")
