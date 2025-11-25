@@ -28,7 +28,7 @@ class Configs:
     epochs = 5000
     save_every = 100
     test_every = 500
-    physical_residual = True
+    physical_residual = False
 
     save_dir = f"./solidification/runs/FNO-PI/"
     if DEBUG_MODE:

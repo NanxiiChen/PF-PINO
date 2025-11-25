@@ -5,6 +5,14 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python 调试程序: solidification",
+            "type": "debugpy",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "module": "solidification.train",
+        },
+        {
             "name": "Python 调试程序: 1d",
             "type": "debugpy",
             "request": "launch",
