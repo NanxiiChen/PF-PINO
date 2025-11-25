@@ -8,6 +8,10 @@ __pycache__/
 helvetica/
 data/
 train2d.sh
+*.pvd
+*.vtu
+*.xdmf
+*.h5
 
 # C extensions
 *.so
