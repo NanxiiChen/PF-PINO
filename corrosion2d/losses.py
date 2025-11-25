@@ -23,6 +23,8 @@ class FDM2d:
         dudx = jnp.zeros_like(u)
         dudy = jnp.zeros_like(u)
 
+        # 首先，x和y坐标对应数组的列和行
+        # 其次，y的正方向本来是向上的，但是为了和数组的索引向下对应，我们的meshy实际上也是从上到下增大的
         dudx = dudx.at[:, 1:-1].set((u[:, 2:] - u[:, :-2]) / (2 * dx))
         dudy = dudy.at[1:-1, :].set((u[2:, :] - u[:-2, :]) / (2 * dy))
 
