@@ -3,7 +3,7 @@ import jax.numpy as jnp
 
 @dataclass(frozen=True)
 class Configs:
-    DEBUG_MODE = True
+    DEBUG_MODE = False
 
     # Model architecture settings
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
@@ -28,9 +28,9 @@ class Configs:
     epochs = 5000
     save_every = 100
     test_every = 500
-    physical_residual = True
+    physical_residual = False
 
-    save_dir = f"./solidification/runs/FNO-PI/"
+    save_dir = f"./solidification/runs/FNO/"
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
     data_dir = "./solidification/data/train_valid/"
@@ -41,7 +41,7 @@ class Configs:
 
     AC_PRE_SCALE = 1e3
     TEM_PRE_SCALE = 1e2
-
+    
     rho_val = 1e3        
     epsilon = 0.015          
     sigma = 0.1          

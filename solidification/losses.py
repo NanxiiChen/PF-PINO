@@ -4,6 +4,7 @@ import jax.numpy as jnp
 from jax import vmap
 from jax.flatten_util import ravel_pytree
 from .model2d.base_model2d import AutoRegressiveModel2d
+from .configs.train_debug import Configs
 
 class FDM2d:
     """
@@ -16,7 +17,7 @@ class FDM2d:
         dx: float,
         dy: float
     ) -> jnp.ndarray:
-        """
+        r"""
         Compute $\nabla u$ using central difference.
         $\nabla u = (du/dx, du/dy)$
         """
@@ -36,6 +37,33 @@ class FDM2d:
 
 
         return jnp.stack([dudx, dudy], axis=0)
+    
+    @staticmethod
+    @eqx.filter_jit
+    def divergence(
+        vec_field: jnp.ndarray,
+        dx: float,
+        dy: float
+    ) -> jnp.ndarray:
+        r"""
+        Compute $\nabla \cdot \mathbf{F}$ using central difference.
+        $\nabla \cdot \mathbf{F} = dF_x/dx + dF_y/dy$
+        """
+        Fx = vec_field[0, :, :]
+        Fy = vec_field[1, :, :]
+
+        dFxdx = jnp.zeros_like(Fx)
+        dFydy = jnp.zeros_like(Fy)
+
+        dFxdx = dFxdx.at[:, 1:-1].set((Fx[:, 2:] - Fx[:, :-2]) / (2 * dx))
+        dFxdx = dFxdx.at[:, 0].set((-3*Fx[:, 0] + 4*Fx[:, 1] - Fx[:, 2]) / (2*dx))
+        dFxdx = dFxdx.at[:, -1].set((3*Fx[:, -1] - 4*Fx[:, -2] + Fx[:, -3]) / (2*dx))
+
+        dFydy = dFydy.at[1:-1, :].set((Fy[2:, :] - Fy[:-2, :]) / (2 * dy))
+        dFydy = dFydy.at[0, :].set((-3*Fy[0, :] + 4*Fy[1, :] - Fy[2, :]) / (2*dy))
+        dFydy = dFydy.at[-1, :].set((3*Fy[-1, :] - 4*Fy[-2, :] + Fy[-3, :]) / (2*dy))
+
+        return dFxdx + dFydy
     
     @staticmethod
     @eqx.filter_jit
@@ -76,130 +104,118 @@ class Losses:
         return loss, {}
     
 
+    @staticmethod
+    def kappa(gradx, grady, sigma, eps=1e-12):
+        norm_sq = gradx**2 + grady**2 + eps
+        cos2theta = (gradx**2 - grady**2) / norm_sq
+        sin2theta = 2 * gradx * grady / norm_sq
+        cos4theta = cos2theta**2 - sin2theta**2
+        return 1 + sigma * cos4theta
+    
+    @staticmethod
+    def H(gradx, grady, sigma, eps=1e-12):
+        norm6 = (gradx**2 + grady**2)**3 + eps
+        coef = 16.0 * sigma / norm6
+        Hx = coef * gradx * (gradx**2 * grady**2 - grady**4)
+        Hy = coef * grady * (grady**2 * gradx**2 - gradx**4)
+        return jnp.stack([Hx, Hy], axis=0)
+    
+
     @classmethod
     def ac_loss(cls,
                 model: AutoRegressiveModel2d,
                 xs: jnp.ndarray,
+                ks: jnp.ndarray,
                 dx: float,
                 dy: float,
                 dt: float,
-                configs: object,
+                configs: Configs,
                 **kwargs) -> jnp.ndarray:
         """
         Allen-Cahn equation loss for 2D corrosion modeling.
         """
 
-        def residual_fn(x, dx, dy, dt):
-            AC1 = 2 * configs.AA * configs.Lp * configs.Tc
-            AC2 = configs.Lp * configs.OMEGA_PHI * configs.Tc
-            AC3 = configs.Lp * configs.ALPHA_PHI * configs.Tc / configs.Lc**2
+        def residual_fn(x, k, dx, dy, dt):
             pred = model.forward(x)
 
             phi0 = x[0, :, :]
-            c0 = x[1, :, :]
+            T0 = x[1, :, :]
 
             phi = pred[0, :, :]
-            c = pred[1, :, :]
+            T = pred[1, :, :]
 
-            h_phi = -2 * phi**3 + 3 * phi**2
-            dh_dphi = -6 * phi**2 + 6 * phi
-            dg_dphi = 4 * phi**3 - 6 * phi**2 + 2 * phi
-
-            dphi_dt = (phi - phi0) / dt
-            lap_phi = FDM2d.laplacian(phi, dx, dy)
+            dphi_dt = (phi - phi0) / dt / configs.Tc
+            nabla_phi = FDM2d.nabla(phi, dx, dy) / configs.Lc # shape: (2, H, W)
+            grad_phi_x = nabla_phi[0, :, :]
+            grad_phi_y = nabla_phi[1, :, :]
+            grad_phi_2 = grad_phi_x**2 + grad_phi_y**2
+            kappa_val = cls.kappa(grad_phi_x, grad_phi_y, configs.sigma) # shape: (H, W)
+            H = cls.H(grad_phi_x, grad_phi_y, configs.sigma) # shape: (2, H, W)
+            # if necessary, stop gradient on kappa
+            vec_field = kappa_val**2 * nabla_phi + kappa_val * grad_phi_2 * H  # shape: (2, H, W)
+            div_term = FDM2d.divergence(vec_field, dx, dy) / configs.Lc # shape: (H, W)
+            F_prime = phi**3 - phi  # shape: (H, W)
+            h_prime = phi**4 - 2 * phi**2 + 1  # shape: (H, W)
+            r"""
+            \frac{\delta E}{\delta \phi} = -\nabla\cdot(\kappa^2 \nabla \phi + \kappa \lvert\nabla \phi\rvert^2 H) + \frac{F'(\phi)}{\epsilon^2})
+            """
             residual = (
-                dphi_dt
-                - AC1 * (c - h_phi * (configs.CSE - configs.CLE) - configs.CLE)
-                * (configs.CSE - configs.CLE) * dh_dphi
-                + AC2 * dg_dphi
-                - AC3 * lap_phi
+                configs.rho_val * dphi_dt
+                - div_term
+                + F_prime / (configs.epsilon ** 2)
+                + configs.lam / configs.epsilon * h_prime * T
             )
+
             return residual / configs.AC_PRE_SCALE
         
-        residuals = vmap(residual_fn, in_axes=(0, None, None, None))(xs, dx, dy, dt)
+        residuals = vmap(residual_fn, in_axes=(0, 0, None, None, None))(xs, ks, dx, dy, dt)
         loss = jnp.mean(jnp.square(residuals))
         return loss, {}
     
     @classmethod
-    def ch_loss(cls,
+    def tem_loss(cls,
                 model: AutoRegressiveModel2d,
                 xs: jnp.ndarray,
+                ks: jnp.ndarray,
                 dx: float,
                 dy: float,
                 dt: float,
-                configs: object,
+                configs: Configs,
                 **kwargs) -> jnp.ndarray:
         """
-        Cahn-Hilliard equation loss for 2D corrosion modeling.
+        Temperature equation loss for 2D corrosion modeling.
         """
 
-        def residual_fn(x, dx, dy, dt):
-            CH1 = 2 * configs.AA * configs.MM * configs.Tc / configs.Lc**2
+        def residual_fn(x, k, dx, dy, dt):
             pred = model.forward(x)
 
             phi0 = x[0, :, :]
-            c0 = x[1, :, :]
+            T0 = x[1, :, :]
 
             phi = pred[0, :, :]
-            c = pred[1, :, :]
-
-            nabla_phi = FDM2d.nabla(phi, dx, dy)
-            dc_dt = (c - c0) / dt
-            lap_phi = FDM2d.laplacian(phi, dx, dy)
-            lap_c = FDM2d.laplacian(c, dx, dy)
-            lap_h_phi = 6 * (
-                phi * (1 - phi) * lap_phi 
-                + (1 - 2 * phi) * jnp.sum(nabla_phi ** 2, axis=0)
-            )
+            T = pred[1, :, :]
+            dT_dt = (T - T0) / dt / configs.Tc
+            lap_T = FDM2d.laplacian(T, dx, dy) / configs.Lc**2
+            h_prime = phi**4 - 2 * phi**2 + 1  # shape: (H, W)
+            dphi_dt = (phi - phi0) / dt / configs.Tc
             residual = (
-                dc_dt
-                - CH1 * lap_c
-                + CH1 * (configs.CSE - configs.CLE) * lap_h_phi
+                dT_dt - configs.D_val * lap_T - k * h_prime * dphi_dt
             )
-            return residual / configs.CH_PRE_SCALE
+
+            return residual / configs.TEM_PRE_SCALE
         
-        residuals = vmap(residual_fn, in_axes=(0, None, None, None))(xs, dx, dy, dt)
+        residuals = vmap(residual_fn, in_axes=(0, 0, None, None, None))(xs, ks, dx, dy, dt)
         loss = jnp.mean(jnp.square(residuals))
         return loss, {}
     
-    @classmethod
-    def bc_loss(cls,
-                model: AutoRegressiveModel2d,
-                xs: jnp.ndarray,
-                dx: float,
-                dy: float,
-                configs: object,
-                **kwargs) -> jnp.ndarray:
-        """
-        Neumann Boundary Condition loss for 2D corrosion modeling.
-        """
-        def normal_grad_penalty(u, dx, dy):
-            # left = (u[:, 1] - u[:, 0])
-            # right = (u[:, -1] - u[:, -2])
-            left = ( -3 * u[:, 0] + 4 * u[:, 1] - u[:, 2] ) / (2 * dx)
-            right = ( 3 * u[:, -1] - 4 * u[:, -2] + u[:, -3] ) / (2 * dx)
-            return (
-                jnp.mean(left ** 2) + jnp.mean(right ** 2) 
-            )
 
-        def per_sample_bc_loss(x, dx, dy):
-            pred = model.forward(x)
-            phi = pred[0, :, :]
-            c = pred[1, :, :]
-            # mu = c - (configs.CSE - configs.CLE) * ( -2 * phi**3 + 3 * phi**2 )
-            loss_phi = normal_grad_penalty(phi, dx, dy)
-            loss_mu = normal_grad_penalty(c, dx, dy)
-            return loss_phi + loss_mu
-        
-        loss = vmap(per_sample_bc_loss, in_axes=(0, None, None))(xs, dx, dy)
-        return jnp.mean(loss), {}
-    
     @classmethod
     @eqx.filter_jit
     def pi_loss(cls,
                 model: AutoRegressiveModel2d,
                 xs: jnp.ndarray,
                 ys: jnp.ndarray,
+                ks: jnp.ndarray,
                 dx: float,
                 dy: float,
                 dt: float,
@@ -212,7 +228,7 @@ class Losses:
         aux_vars = {}
         for vg in VG_FNS:
             (loss, aux_var), grad = vg(
-                model, xs, ys=ys, dx=dx, dy=dy, dt=dt, configs=configs
+                model, xs, ys=ys, dx=dx, ks=ks, dy=dy, dt=dt, configs=configs
             )
             losses.append(loss)
             grads.append(grad)
@@ -245,6 +261,6 @@ class Losses:
         
 MSE_VG = eqx.filter_value_and_grad(Losses.mse_loss, has_aux=True)
 AC_VG  = eqx.filter_value_and_grad(Losses.ac_loss, has_aux=True)
-CH_VG  = eqx.filter_value_and_grad(Losses.ch_loss, has_aux=True)
-# BC_VG  = eqx.filter_value_and_grad(Losses.bc_loss, has_aux=True)
-VG_FNS = [MSE_VG, AC_VG, CH_VG,]
+TEM_VG  = eqx.filter_value_and_grad(Losses.tem_loss, has_aux=True)
+
+VG_FNS = [MSE_VG, AC_VG, TEM_VG,]

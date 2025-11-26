@@ -191,5 +191,5 @@ class UNet2d(AutoRegressiveModel2d):
         # Final output layer
         x = self.output_conv(x)
         
-        return jax.nn.tanh(x)
+        return x
 

@@ -55,10 +55,10 @@ def train_step(model, loss_fn, state, optimizer, xs, ys, **kwargs):
 
 @eqx.filter_jit
 def train_step_pi(model, loss_fn, state, optimizer, 
-                  xs, ys, Ks, dx, dy, dt, configs, **kwargs):
+                  xs, ys, ks, dx, dy, dt, configs, **kwargs):
     (weighted_loss, (loss_components, weight_components, aux_vars)), grad = eqx.filter_value_and_grad(
         loss_fn, has_aux=True
-    )(model, xs, ys, Ks, dx, dy, dt, configs, **kwargs)
+    )(model, xs, ys, ks, dx, dy, dt, configs, **kwargs)
     updates, new_state = optimizer.update(grad, state, model)
     new_model = eqx.apply_updates(model, updates)
     return new_model, new_state, weighted_loss, loss_components, weight_components, aux_vars
@@ -127,7 +127,7 @@ def main():
         os.makedirs(savedir)
     
     with open(os.path.join(savedir, "logs.csv"), "w") as f:
-        f.write("Epoch,TrainLoss,ValidLoss,ACLoss,CHLoss\n")
+        f.write("Epoch,TrainLoss,ValidLoss,ACLoss,TEMLoss\n")
         
     with open(os.path.join(savedir, "test_logs.csv"), "w") as f:
         f.write("Epoch,TestMSE\n")
@@ -141,20 +141,20 @@ def main():
         train_loss_epoch = 0.0
         val_loss_epoch = 0.0
         ac_loss_epoch = 0.0
-        ch_loss_epoch = 0.0
+        tem_loss_epoch = 0.0
         for train_batch_x, train_batch_y in train_loader:
             if configs.physical_residual:
                 model, opt_state, weighted_loss, loss_components, weight_components, aux_vars = train_step_pi(
                     model, loss_fn,
                     opt_state, optimizer, 
                     train_batch_x, train_batch_y,
-                    dx=dx, dy=dy,
+                    dx=dx, dy=dy, ks=train_batch_x[:, 2, ...],
                     dt=dt, configs=configs,
                     pde_name=pde_name,
                 )
                 train_loss_epoch += loss_components[0].item() * train_batch_x.shape[0]
                 ac_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
-                ch_loss_epoch += loss_components[2].item() * train_batch_x.shape[0]
+                tem_loss_epoch += loss_components[2].item() * train_batch_x.shape[0]
 
             else:
                 model, opt_state, loss = train_step(
@@ -167,7 +167,7 @@ def main():
         train_loss_history.append(train_loss_epoch)
         if configs.physical_residual:
             ac_loss_epoch /= train_x_full.shape[0]
-            ch_loss_epoch /= train_x_full.shape[0]
+            tem_loss_epoch /= train_x_full.shape[0]
         
         for val_batch_x, val_batch_y in valid_loader:
             val_loss, _ = losses.mse_loss(model, val_batch_x, val_batch_y,)
@@ -177,7 +177,7 @@ def main():
         
 
         with open(os.path.join(savedir, "logs.csv"), "a") as f:
-            f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss_epoch},{ch_loss_epoch}\n")
+            f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss_epoch},{tem_loss_epoch}\n")
 
 
         if epoch % configs.save_every == 0 or epoch == configs.epochs - 1:

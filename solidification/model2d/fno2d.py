@@ -110,6 +110,8 @@ class FNO2d(AutoRegressiveModel2d):
         for block in self.fno_blocks:
             x = block(x)
         x = self.projection(x)
-        return jax.nn.tanh(x)
-        # return x
+        # phi, T = jnp.split(x, 2, axis=0)
+        # phi = jnp.tanh(phi)
+        # x = jnp.concatenate([phi, T], axis=0)
+        return x
                  
