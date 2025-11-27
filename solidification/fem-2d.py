@@ -9,14 +9,14 @@ parameters["form_compiler"]["cpp_optimize"] = True
 set_log_level(LogLevel.ERROR)
 
 # ==================== 模式设置 ====================
-# mode = 'train_valid'
-mode = 'test'
+mode = 'train_valid'
+# mode = 'test'
 
 if mode == 'train_valid':
-    K_values = [0.6, 0.8, 1.0, 1.2]
+    K_values = [0.6,0.7, 0.8,0.9, 1.0, 1.1,1.2]
     save_dir = './solidification/data/train_valid'
 elif mode == 'test':
-    K_values = [0.7, 0.9, 1.1]
+    K_values = [0.65, 0.75, 0.85, 0.95, 1.05, 1.15]
     save_dir = './solidification/data/test'
 else:
     raise ValueError("Invalid mode")
