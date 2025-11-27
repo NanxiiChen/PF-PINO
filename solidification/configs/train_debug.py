@@ -8,7 +8,7 @@ class Configs:
     # Model architecture settings
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
 
-    in_channels = 6 # phi, c, K, meshx, meshy, dt
+    in_channels = 4 # phi, c, K, meshx, meshy, dt
     out_channels = 2 # phi, c
     modes_x = 8
     modes_y = 8
@@ -29,7 +29,7 @@ class Configs:
     test_every = 500
     physical_residual = True
 
-    save_dir = f"./solidification/runs/FNO-PI/"
+    save_dir = f"./solidification/runs/FNO-PI/" if physical_residual else f"./solidification/runs/FNO/"
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
     data_dir = "./solidification/data/train_valid/"
@@ -39,7 +39,7 @@ class Configs:
     Tc = 1.0 # tc = t / Tc
 
     AC_PRE_SCALE = 1e4
-    TEM_PRE_SCALE = 1e1
+    TEM_PRE_SCALE = 5e1
 
     rho_val = 1e3        
     epsilon = 0.015          

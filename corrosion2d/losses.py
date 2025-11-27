@@ -458,14 +458,12 @@ class Losses:
             return jax.tree_map(lambda g: weight * g, grad_tree)
         
         total_grad = jax.tree_map(lambda x: jnp.zeros_like(x), grads[0])
-        
         for i, g in enumerate(grads):
             weighted_g = sum_weighted_grads(weights[i], g)
             total_grad = jax.tree_map(lambda a, b: a + b, total_grad, weighted_g)
 
         return (total_loss, (losses, weights, aux_vars)), total_grad
 
-        # total_loss = jnp.sum(jnp.array(weights) * jnp.array(losses))
         # return total_loss, (losses, weights, aux_vars)
             
     @classmethod

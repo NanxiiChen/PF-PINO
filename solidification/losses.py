@@ -96,8 +96,9 @@ class Losses:
                  model: AutoRegressiveModel2d,
                  xs: jnp.ndarray,
                  ys: jnp.ndarray,
+                 ks: jnp.ndarray,
                  **kwargs) -> jnp.ndarray:
-        y_pred = vmap(model.forward)(xs)
+        y_pred = vmap(model.forward, in_axes=(0, 0))(xs, ks)
         loss = jnp.mean((y_pred - ys) ** 2)
         return loss, {}
     
@@ -134,7 +135,7 @@ class Losses:
         """
 
         def residual_fn(x, k, dx, dy, dt):
-            pred = model.forward(x)
+            pred = model.forward(x, k)
 
             phi0 = x[0, :, :]
             T0 = x[1, :, :]
@@ -185,7 +186,7 @@ class Losses:
         """
 
         def residual_fn(x, k, dx, dy, dt):
-            pred = model.forward(x)
+            pred = model.forward(x, k)
 
             phi0 = x[0, :, :]
             T0 = x[1, :, :]
@@ -226,7 +227,7 @@ class Losses:
         aux_vars = {}
         for vg in VG_FNS:
             (loss, aux_var), grad = vg(
-                model, xs, ys=ys, dx=dx, ks=ks, dy=dy, dt=dt, configs=configs
+                model, xs, ys=ys, ks=ks, dx=dx, dy=dy, dt=dt, configs=configs
             )
             losses.append(loss)
             grads.append(grad)
@@ -242,7 +243,17 @@ class Losses:
             pass
     
         total_loss = jnp.sum(jnp.array(weights) * jnp.array(losses))
-        return total_loss, (losses, weights, aux_vars)
+
+        def sum_weighted_grads(weight, grad_tree):
+            return jax.tree_map(lambda g: weight * g, grad_tree)
+        
+        total_grad = jax.tree_map(lambda x: jnp.zeros_like(x), grads[0])
+        for i, g in enumerate(grads):
+            weighted_g = sum_weighted_grads(weights[i], g)
+            total_grad = jax.tree_map(lambda a, b: a + b, total_grad, weighted_g)
+            
+        return (total_loss, (losses, weights, aux_vars)), total_grad
+        # return total_loss, (losses, weights, aux_vars)
             
     @classmethod
     def grad_norm_weights(cls, grads: list, eps=1e-6):

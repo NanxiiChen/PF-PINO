@@ -57,23 +57,34 @@ class SpectralConv2d(eqx.Module):
 class FNOBlock2d(eqx.Module):
     spectral_conv: SpectralConv2d
     bypass_conv: eqx.nn.Conv2d
+    cond_proj: eqx.nn.Linear
     activation: Callable = jax.nn.relu
 
     def __init__(self, in_channels, out_channels,
                  modes_x, modes_y, activation, key):
-        spec_key, bypass_key = jax.random.split(key)
+        spec_key, bypass_key, cond_key = jax.random.split(key, 3)
         self.spectral_conv = SpectralConv2d(
             in_channels, out_channels,
             modes_x, modes_y, spec_key)
         self.bypass_conv = eqx.nn.Conv2d(
             in_channels, out_channels,
             kernel_size=(1, 1), key=bypass_key)
+        self.cond_proj = eqx.nn.Linear(
+            1, 2 * out_channels, key=cond_key)
         self.activation = activation
         
-    def __call__(self, x):
+    def __call__(self, x, params):
         x1 = self.spectral_conv(x)
         x2 = self.bypass_conv(x)
-        return self.activation(x1 + x2)
+        out = x1 + x2
+
+        style = self.cond_proj(params) # (2 * out_channels,)
+        style = style[:, None, None] # 广播到 (2*C, 1, 1) 以便与 (C, H, W) 运算
+        scale, shift = jnp.split(style, 2, axis=0) # (C, 1, 1), (C, 1, 1)
+
+        out = out * (1 + scale) + shift
+
+        return self.activation(out)
     
 
 
@@ -99,19 +110,20 @@ class FNO2d(AutoRegressiveModel2d):
                     width, width,
                     modes_x, modes_y,
                     activation, block_keys[i])
-            )
+                )
         self.projection = eqx.nn.Conv2d(
             width, out_channels,
             kernel_size=(1, 1), key=proj_key)
         
 
-    def __call__(self, x):
+    def __call__(self, x, params):
         x = self.lifting(x)
         for block in self.fno_blocks:
-            x = block(x)
+            x = block(x, params)
         x = self.projection(x)
-        phi, T = jnp.split(x, 2, axis=0)
-        phi = jnp.tanh(phi)
-        x = jnp.concatenate([phi, T], axis=0)
+        # phi, T = jnp.split(x, 2, axis=0)
+        # phi = jnp.tanh(phi)*1.01 
+        # T = jnp.tanh(T)*1.01*0.3 - 0.3
+        # x = jnp.concatenate([phi, T], axis=0)
         return x
                  
