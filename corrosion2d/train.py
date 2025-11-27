@@ -27,13 +27,13 @@ def dataloader(
 ):
     n_samples = dataset_x.shape[0]
 
-    n_batches = int(jnp.ceil(n_samples / batch_size))
+    n_batches = n_samples // batch_size
 
     permutation = jax.random.permutation(key, n_samples)
 
     for batch_id in range(n_batches):
         start = batch_id * batch_size
-        end = min((batch_id + 1) * batch_size, n_samples)
+        end = (batch_id + 1) * batch_size
 
         batch_indices = permutation[start:end]
 
@@ -56,9 +56,9 @@ def train_step(model, loss_fn, state, optimizer, xs, ys, **kwargs):
 @eqx.filter_jit
 def train_step_pi(model, loss_fn, state, optimizer, 
                   xs, ys, dx, dy, dt, configs, **kwargs):
-    (weighted_loss, (loss_components, weight_components, aux_vars)), grad = eqx.filter_value_and_grad(
-        loss_fn, has_aux=True
-    )(model, xs, ys, dx, dy, dt, configs, **kwargs)
+    (weighted_loss, (loss_components, weight_components, aux_vars)), grad = loss_fn(
+        model, xs, ys, dx, dy, dt, configs, **kwargs
+    )
     updates, new_state = optimizer.update(grad, state, model)
     new_model = eqx.apply_updates(model, updates)
     return new_model, new_state, weighted_loss, loss_components, weight_components, aux_vars

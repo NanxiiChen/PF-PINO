@@ -27,20 +27,20 @@ def dataloader(
 ):
     n_samples = dataset_x.shape[0]
 
-    n_batches = int(jnp.ceil(n_samples / batch_size))
+    # 使用整除 // 而不是 ceil，这样会丢弃最后不足一个 batch 的数据
+    # 从而保证每个 batch 的大小严格等于 batch_size，避免 JIT 重复编译
+    n_batches = n_samples // batch_size
 
     permutation = jax.random.permutation(key, n_samples)
 
     for batch_id in range(n_batches):
         start = batch_id * batch_size
-        end = min((batch_id + 1) * batch_size, n_samples)
-
-        batch_indices = permutation[start:end]
-
+        end = (batch_id + 1) * batch_size
+        indices = permutation[start:end]
         # yield dataset_x[batch_indices], dataset_y[batch_indices]
         yield (
-            dataset_x[batch_indices, ..., ::down_scale, ::down_scale],
-            dataset_y[batch_indices, ..., ::down_scale, ::down_scale],
+            dataset_x[indices, ..., ::down_scale, ::down_scale],
+            dataset_y[indices, ..., ::down_scale, ::down_scale],
         )
 
 

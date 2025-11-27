@@ -437,8 +437,7 @@ class Losses:
                 dy: float,
                 dt: float,
                 configs: object,
-                pde_name: str = "both",
-                **kwargs) -> jnp.ndarray:
+                **kwargs):
         
         losses = []
         grads = []
@@ -452,16 +451,22 @@ class Losses:
             aux_vars.update(aux_var)
 
         weights = cls.grad_norm_weights(grads)
-        # Adjust weights based on the PDE being solved
-        if pde_name == 'ac':
-            weights = jnp.array([weights[0], weights[1], 0.0])
-        elif pde_name == 'ch':
-            weights = jnp.array([weights[0], 0.0, weights[2]])
-        else:
-            pass
-    
+
         total_loss = jnp.sum(jnp.array(weights) * jnp.array(losses))
-        return total_loss, (losses, weights, aux_vars)
+
+        def sum_weighted_grads(weight, grad_tree):
+            return jax.tree_map(lambda g: weight * g, grad_tree)
+        
+        total_grad = jax.tree_map(lambda x: jnp.zeros_like(x), grads[0])
+        
+        for i, g in enumerate(grads):
+            weighted_g = sum_weighted_grads(weights[i], g)
+            total_grad = jax.tree_map(lambda a, b: a + b, total_grad, weighted_g)
+
+        return (total_loss, (losses, weights, aux_vars)), total_grad
+
+        # total_loss = jnp.sum(jnp.array(weights) * jnp.array(losses))
+        # return total_loss, (losses, weights, aux_vars)
             
     @classmethod
     def grad_norm_weights(cls, grads: list, eps=1e-6):

@@ -23,8 +23,7 @@ class Configs:
     decay_rate = 0.95
     end_value = 1e-5
     
-
-    batch_size = 128
+    batch_size = 64
     epochs = 5000
     save_every = 100
     test_every = 500
@@ -39,8 +38,8 @@ class Configs:
     Lc = 1.0 # xc = x / Lc
     Tc = 1.0 # tc = t / Tc
 
-    AC_PRE_SCALE = 1e3
-    TEM_PRE_SCALE = 1e2
+    AC_PRE_SCALE = 1e4
+    TEM_PRE_SCALE = 1e1
 
     rho_val = 1e3        
     epsilon = 0.015          

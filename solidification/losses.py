@@ -91,8 +91,6 @@ class FDM2d:
 
 
 class Losses:
-    # TODO: Change AC and CH losses to the solidification formulation
-
     @classmethod
     def mse_loss(cls,
                  model: AutoRegressiveModel2d,
