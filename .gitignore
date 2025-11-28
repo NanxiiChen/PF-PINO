@@ -12,6 +12,7 @@ train2d.sh
 *.vtu
 *.xdmf
 *.h5
+databackup/
 
 # C extensions
 *.so

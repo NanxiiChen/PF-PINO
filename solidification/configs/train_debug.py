@@ -6,28 +6,28 @@ class Configs:
     DEBUG_MODE = True
 
     # Model architecture settings
-    model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
+    model_type = "unet"  # Options: 'fno', 'fcn', 'unet'
 
     in_channels = 4 # phi, c, K, meshx, meshy, dt
     out_channels = 2 # phi, c
     modes_x = 8
     modes_y = 8
-    width = 64
+    width = 32
     depth = 4
     activation = "relu"
     down_scale = 1
 
 
     learning_rate = 5e-4
-    decay_every = 200
+    decay_every = 100
     decay_rate = 0.95
     end_value = 1e-5
     
-    batch_size = 64
+    batch_size = 128
     epochs = 5000
-    save_every = 100
-    test_every = 500
-    physical_residual = True
+    save_every = 50
+    test_every = 200
+    physical_residual = False
 
     save_dir = f"./solidification/runs/FNO-PI/" if physical_residual else f"./solidification/runs/FNO/"
     if DEBUG_MODE:

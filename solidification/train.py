@@ -92,7 +92,15 @@ def main():
              train_y=train_y_full,
              valid_x=valid_x_full,
              valid_y=valid_y_full)
-    
+    print(f"Train Dataset shape: x {train_x_full.shape}, y {train_y_full.shape}")
+    print(f"Valid Dataset shape: x {valid_x_full.shape}, y {valid_y_full.shape}")
+    test_solutions = jnp.load(os.path.join(configs.test_data_dir, "solutions_grid.npy"))
+    test_meshes = jnp.load(os.path.join(configs.test_data_dir, "mesh_grid_coords.npy"))
+    test_ks = jnp.load(os.path.join(configs.test_data_dir, "K_values.npy")).reshape(-1, 1)  # (samples, 1)
+    test_meshes = jnp.transpose(test_meshes, (2, 0, 1))  # (samples, 2, nx, ny)
+    test_times = jnp.load(os.path.join(configs.test_data_dir, "times.npy"))
+    print(f"Test Dataset shape: solutions {test_solutions.shape}, meshes {test_meshes.shape}, ks {test_ks.shape}")
+
     model_kwargs = {
         'modes_x': configs.modes_x,
         'modes_y': configs.modes_y,
@@ -197,11 +205,6 @@ def main():
             
 
         if epoch % configs.test_every == 0 or epoch == configs.epochs - 1:
-            test_solutions = jnp.load(os.path.join(configs.test_data_dir, "solutions_grid.npy"))
-            test_meshes = jnp.load(os.path.join(configs.test_data_dir, "mesh_grid_coords.npy"))
-            test_ks = jnp.load(os.path.join(configs.test_data_dir, "K_values.npy")).reshape(-1, 1)  # (samples, 1)
-            test_meshes = jnp.transpose(test_meshes, (2, 0, 1))  # (samples, 2, nx, ny)
-            test_times = jnp.load(os.path.join(configs.test_data_dir, "times.npy"))
 
             test_times = test_times / configs.Tc
             test_meshes = test_meshes / configs.Lc
