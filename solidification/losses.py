@@ -96,11 +96,34 @@ class Losses:
                  model: AutoRegressiveModel2d,
                  xs: jnp.ndarray,
                  ys: jnp.ndarray,
-                 ks: jnp.ndarray,
                  **kwargs) -> jnp.ndarray:
-        y_pred = vmap(model.forward, in_axes=(0, 0))(xs, ks)
+        y_pred = vmap(model.forward)(xs)
         loss = jnp.mean((y_pred - ys) ** 2)
         return loss, {}
+    
+    @classmethod
+    def mse_loss_weighted(cls,
+                 model: AutoRegressiveModel2d,
+                 xs: jnp.ndarray,
+                 ys: jnp.ndarray,
+                 dx: float,
+                 dy: float,
+                 dt: float,
+                 **kwargs) -> jnp.ndarray:
+        
+        def residual_fn(x, y, dx, dy, dt):
+            pred = model.forward(x)
+            phi = pred[0, :, :]
+            nabla_phi = FDM2d.nabla(phi, dx, dy)  # shape: (2, H, W)
+            grad_phi2 = jnp.sum(nabla_phi**2, axis=0)  # shape: (H, W)
+            weight = 1 + jnp.tanh(grad_phi2)* 10.0
+            weight = jax.lax.stop_gradient(weight)
+            return weight * (pred - y)
+        
+        residuals = vmap(residual_fn, in_axes=(0, 0, None, None, None))(xs, ys, dx, dy, dt)
+        loss = jnp.mean(jnp.square(residuals))
+        return loss, {}
+
     
 
     @staticmethod
@@ -135,7 +158,7 @@ class Losses:
         """
 
         def residual_fn(x, k, dx, dy, dt):
-            pred = model.forward(x, k)
+            pred = model.forward(x)
 
             phi0 = x[0, :, :]
             T0 = x[1, :, :]
@@ -186,7 +209,7 @@ class Losses:
         """
 
         def residual_fn(x, k, dx, dy, dt):
-            pred = model.forward(x, k)
+            pred = model.forward(x)
 
             phi0 = x[0, :, :]
             T0 = x[1, :, :]

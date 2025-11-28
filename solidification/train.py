@@ -48,7 +48,7 @@ def dataloader(
 def train_step(model, loss_fn, state, optimizer, xs, ys, ks, **kwargs):
     (loss, _), grad = eqx.filter_value_and_grad(
         loss_fn, has_aux=True
-    )(model, xs, ys, ks, **kwargs)
+    )(model, xs, ys, **kwargs)
     updates, new_state = optimizer.update(grad, state, model)
     new_model = eqx.apply_updates(model, updates)
     return new_model, new_state, loss
@@ -96,7 +96,7 @@ def main():
     print(f"Valid Dataset shape: x {valid_x_full.shape}, y {valid_y_full.shape}")
     test_solutions = jnp.load(os.path.join(configs.test_data_dir, "solutions_grid.npy"))
     test_meshes = jnp.load(os.path.join(configs.test_data_dir, "mesh_grid_coords.npy"))
-    test_ks = jnp.load(os.path.join(configs.test_data_dir, "K_values.npy")).reshape(-1, 1)  # (samples, 1)
+    test_ks = jnp.load(os.path.join(configs.test_data_dir, "K_values.npy"))
     test_meshes = jnp.transpose(test_meshes, (2, 0, 1))  # (samples, 2, nx, ny)
     test_times = jnp.load(os.path.join(configs.test_data_dir, "times.npy"))
     print(f"Test Dataset shape: solutions {test_solutions.shape}, meshes {test_meshes.shape}, ks {test_ks.shape}")
@@ -158,8 +158,8 @@ def main():
                 model, opt_state, weighted_loss, loss_components, weight_components, aux_vars = train_step_pi(
                     model, loss_fn,
                     opt_state, optimizer, 
-                    train_batch_x[:, :-1, ...], train_batch_y, # exclude k from x input
-                    dx=dx, dy=dy, ks=train_batch_x[:, -1:, 0, 0],
+                    train_batch_x, train_batch_y,
+                    dx=dx, dy=dy, ks=train_batch_x[:, 2:, ...],
                     dt=dt, configs=configs,
                     pde_name=pde_name,
                 )
@@ -171,8 +171,7 @@ def main():
                 model, opt_state, loss = train_step(
                     model, loss_fn,
                     opt_state, optimizer,
-                    train_batch_x[:, :-1, ...], train_batch_y, # exclude k from x input
-                    ks=train_batch_x[:, -1:, 0, 0],
+                    train_batch_x, train_batch_y,
                 )
                 train_loss_epoch += loss.item() * train_batch_x.shape[0]
         train_loss_epoch /= train_x_full.shape[0]
@@ -184,8 +183,7 @@ def main():
         for val_batch_x, val_batch_y in valid_loader:
 
             val_loss, _ = losses.mse_loss(model, 
-                                          xs=val_batch_x[:, :-1, ...],  # exclude k from x input
-                                          ks=val_batch_x[:, -1:, 0, 0],
+                                          xs=val_batch_x,
                                           ys=val_batch_y,)
             val_loss_epoch += val_loss.item() * val_batch_x.shape[0]
         val_loss_epoch /= valid_x_full.shape[0]
