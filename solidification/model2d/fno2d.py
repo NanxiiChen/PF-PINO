@@ -62,7 +62,7 @@ class MixedConv2d(eqx.Module):
     conv_1x1: eqx.nn.Conv2d
     conv_3x3: eqx.nn.Conv2d
 
-    def __init__(self, in_channels, out_channels, key):
+    def __init__(self, in_channels, out_channels, activation, key):
         k1, k2 = jax.random.split(key, 2)
         self.conv_1x1 = eqx.nn.Conv2d(in_channels, out_channels, kernel_size=(1, 1), key=k1)
         self.conv_3x3 = eqx.nn.Conv2d(in_channels, out_channels, kernel_size=(3, 3), padding=1, key=k2)
@@ -109,23 +109,6 @@ class UNetBypassBlock(eqx.Module):
         # 5. Final Conv
         return self.dec(x_cat)
 
-    
-# class BypassMixedConv2d(eqx.Module):
-#     mixed_conv1: MixedConv2d
-#     mixed_conv2: MixedConv2d
-#     activation: Callable = jax.nn.relu
-
-#     def __init__(self, in_channels, out_channels, activation, key):
-#         k1, k2 = jax.random.split(key, 2)
-#         self.mixed_conv1 = MixedConv2d(in_channels, out_channels, key=k1)
-#         self.mixed_conv2 = MixedConv2d(out_channels, out_channels, key=k2)
-#         self.activation = activation
-
-#     def __call__(self, x):
-#         x = self.mixed_conv1(x)
-#         x = self.activation(x)
-#         x = self.mixed_conv2(x)
-#         return x
 
 class FNOBlock2d(eqx.Module):
     spectral_conv: SpectralConv2d
@@ -139,7 +122,8 @@ class FNOBlock2d(eqx.Module):
             in_channels, out_channels,
             modes_x, modes_y, spec_key)
         self.bypass_conv = MixedConv2d(
-            in_channels, out_channels, bypass_key)
+            in_channels, out_channels, 
+            activation, bypass_key)
         self.activation = activation
         
     def __call__(self, x):
