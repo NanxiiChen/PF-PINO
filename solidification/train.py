@@ -45,7 +45,7 @@ def dataloader(
 
 
 @eqx.filter_jit
-def train_step(model, loss_fn, state, optimizer, xs, ys, ks, **kwargs):
+def train_step(model, loss_fn, state, optimizer, xs, ys, **kwargs):
     (loss, _), grad = eqx.filter_value_and_grad(
         loss_fn, has_aux=True
     )(model, xs, ys, **kwargs)
@@ -208,7 +208,7 @@ def main():
             test_meshes = test_meshes / configs.Lc
             dt = test_times[1] - test_times[0]
             x_test = test_solutions[:, 0, :, :, :] # (samples, channel, nx, ny)
-            steps = 160
+            steps = 200
             y_test = test_solutions[:, 1:steps+1, :, :, :] # (samples, channel, nx, ny)
             auto_reg_fn = partial(
                 model.auto_reg,

@@ -135,13 +135,23 @@ class Losses:
         return 1 + sigma * cos4theta
     
     @staticmethod
-    def H(gradx, grady, sigma, eps=1e-12):
-        norm6 = (gradx**2 + grady**2)**3 + eps
+    def H(gradx, grady, sigma, eps=1e-6):
+        norm_sq = gradx**2 + grady**2
+        
+        # 只有当梯度模长足够大时才计算各向异性项
+        # 否则在平坦区域，除以极小的 norm6 会导致梯度爆炸或数值噪声
+        valid_mask = norm_sq > 1e-3
+        
+        norm6 = norm_sq**3 + eps
         coef = 16.0 * sigma / norm6
         Hx = coef * gradx * (gradx**2 * grady**2 - grady**4)
         Hy = coef * grady * (grady**2 * gradx**2 - gradx**4)
+        
+        # 使用 where 过滤掉噪声
+        Hx = jnp.where(valid_mask, Hx, 0.0)
+        Hy = jnp.where(valid_mask, Hy, 0.0)
+        
         return jnp.stack([Hx, Hy], axis=0)
-    
 
     @classmethod
     def ac_loss(cls,
@@ -258,12 +268,14 @@ class Losses:
 
         weights = cls.grad_norm_weights(grads)
         # Adjust weights based on the PDE being solved
-        if pde_name == 'ac':
-            weights = jnp.array([weights[0], weights[1], 0.0])
-        elif pde_name == 'ch':
-            weights = jnp.array([weights[0], 0.0, weights[2]])
-        else:
-            pass
+        # if pde_name == 'ac':
+        #     weights = jnp.array([weights[0], weights[1], 0.0])
+        # elif pde_name == 'ch':
+        #     weights = jnp.array([weights[0], 0.0, weights[2]])
+        # else:
+        #     pass
+        # weights = weights.at[1].set(weights[1] / 5.0) # Scale down the AC loss weight
+        # weights = weights.at[2].set(weights[2] / 5.0) # Scale down the TEM loss weight
     
         total_loss = jnp.sum(jnp.array(weights) * jnp.array(losses))
 
