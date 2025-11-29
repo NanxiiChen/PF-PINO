@@ -30,7 +30,8 @@ class Configs:
     test_every = 500
     physical_residual = True
 
-    save_dir = f"./corrosion2d/runs/FNO-PI/"
+    save_dir = f"./corrosion2d/runs/FNO-PI/" \
+        if physical_residual else f"./corrosion2d/runs/FNO/"
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
     data_dir = "./corrosion2d/data/train_valid/"
