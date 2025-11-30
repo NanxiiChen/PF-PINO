@@ -10,8 +10,8 @@ class Configs:
 
     in_channels = 5 # phi, c, K, meshx, meshy, dt
     out_channels = 2 # phi, c
-    modes_x = 8
-    modes_y = 8
+    modes_x = 16
+    modes_y = 16
     width = 64
     depth = 4
     activation = "relu"

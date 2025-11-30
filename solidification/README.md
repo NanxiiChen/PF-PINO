@@ -1,48 +1,80 @@
-我在fenics中用显式积分，需要用很小的步长，在FNO里面训练的时候，因为我是先预测到phi_n+1，再计算物理残差，实际上这相当于是隐式方法了？所以实际上train FNO的时候就可以用更大的时间步了？
+# Phase field dendritic crystal growth
 
-你的直觉非常敏锐！**是的，你的理解完全正确。**
+We are interested in numerically solving the following anisotropic phase-field dendritic crystal growth model equations in the domain  
+$\Omega \subset \mathbb{R}^2$:
 
-在 FNO（或 PINN）中，当你输入 $\phi_n$，输出 $\phi_{n+1}$，并将 $\phi_{n+1}$ 代入物理方程计算残差（Loss）时，这在数学本质上等价于求解一个**隐式方程**。
+$$\rho(\phi)\phi_t = -\frac{\delta E}{\delta \phi} - \frac{\lambda}{\varepsilon} h'(\phi)T, \tag{2.1}$$
 
-### 为什么 FNO 可以用更大的时间步？
+$$
+T_t = \nabla \cdot (D\nabla T) + K h'(\phi)\phi_t, \tag{2.2}
+$$
 
-#### 1. 显式积分 vs. 隐式积分（优化视角）
+where $\phi(x,t)$ is the phase function to label the liquid and solid phases,  
+$\rho(\phi)>0$ is the mobility parameter that can be chosen either as a constant [39],  
+or as a function of $\phi$ [35].  
+$\varepsilon > 0$ is a parameter used to control the interface width,  
+$\lambda$ is the linear kinetic coefficient.  
+In Equation (2.2), $T(x,t)$ is the scaled temperature,  
+$D$ is the constant diffusion rate of the temperature,  
+and $K$ is the latent heat parameter that controls the speed of heat transfer along with the interface.  
+It is worth noting that the efficiency of the schemes we propose below covers the case $D$ is a function of $\phi$ [1]; see Remark 3.3.  
+The function $h(\phi)$ is defined by
 
-*   **显式积分 (FEniCS Explicit)**：
-    *   公式：$\phi_{n+1} = \phi_n + dt \cdot F(\phi_n)$
-    *   **限制**：受到 **CFL 条件**（Courant-Friedrichs-Lewy）的严格限制。一旦 $dt$ 超过某个临界值（对于扩散方程通常是 $dx^2$ 级别），数值误差会指数级放大，导致“爆炸”。
-    *   **本质**：这是一种**外推**。步子迈大了容易扯着蛋。
+$$
+h(\phi) := \frac{1}{5}\phi^5 - \frac{2}{3}\phi^3 + \phi,
+$$
 
-*   **FNO / 神经网络训练 (Implicit-like)**：
-    *   公式（Loss）：Minimize $|| \frac{\phi_{n+1} - \phi_n}{dt} - F(\phi_{n+1}) ||^2$
-    *   **本质**：这是一个**优化问题**（或者叫求根问题）。神经网络试图寻找一个函数 $\phi_{n+1}$，使得它满足方程。
-    *   **优势**：隐式方法通常是**无条件稳定**（Unconditionally Stable）的。即使 $dt$ 很大，解也不会爆炸，只会变得不准确（过于平滑）。神经网络通过优化算法（Adam/SGD）去逼近这个解，不受 CFL 条件限制。
+which represents a generation of latent heat.  
+Following the phenomenological free energy used in [14], we consider here
 
-#### 2. 实际操作建议
+$$
+E(\phi, T) = \int_{\Omega} \left( 
+\frac{1}{2}\kappa^2(\nabla\phi)|\nabla\phi|^2
++ \frac{1}{\varepsilon^2}F(\phi)
++ \frac{\lambda}{2\varepsilon K} T^2
+\right)\, dx, \tag{2.3}
+$$
 
-既然 FNO 具有这种“隐式求解器”的特性，你可以采取以下策略：
+where $F(\phi) = \frac14 (\phi^2 - 1)^2$ is the double-well type Ginzburg–Landau potential.  
+$\kappa(\cdot)$ in (2.3) is a function describing the anisotropic property, which takes the form [14,17]:
 
-1.  **数据生成 (Ground Truth)**：
-    *   继续在 FEniCS 中使用 **小步长 (dt=0.001)**。这是为了保证物理真值的**精度**。
+$$
+\kappa(\nabla\phi) = 1 + \sigma\cos(m\theta), \tag{2.4}
+$$
 
-2.  **FNO 训练 (Training)**：
-    *   可以使用 **大步长 (dt_train = 0.01 甚至 0.05)**。
-    *   也就是说，让 FNO 学习映射：$\phi(t) \to \phi(t + 10dt)$。
-    *   **好处**：训练速度快，长时预测误差累积少。
+where $m$ is a model number of anisotropy,  
+$\sigma$ is the parameter for the anisotropy strength,  
+and $\theta = \arctan\left(\frac{\phi_y}{\phi_x}\right)$.  
+The variational derivative of $E$ with respect to $\phi$ is:
 
-### ⚠️ 唯一的陷阱：Loss 函数的写法
+$$
+\frac{\delta E}{\delta\phi}
+= -\nabla \cdot \left( 
+\kappa^2(\nabla\phi)\nabla\phi
++ \kappa(\nabla\phi)|\nabla\phi|^2 H(\phi)
+\right)
++ \frac{f(\phi)}{\varepsilon^2},
+$$
 
-既然你用了大步长，你的 Physics Loss **必须写成隐式离散形式**，而不能直接用自动微分（Auto-grad）去算 $\partial_t \phi$。
+where $H(\phi)$ is the variational derivative of  
+$\mathcal{K}(\phi):=\int_\Omega \kappa(\nabla\phi)dx$,  
+and $f(\phi)=F'(\phi)$.  
+In the case $m=4$, a direct calculation shows
 
-*   **错误的写法 (试图逼近连续导数)**：
-    $$ \text{Loss} = || \frac{\partial \phi}{\partial t}_{\text{autograd}} - \text{RHS}(\phi) ||^2 $$
-    *原因：当 $dt$ 很大时，神经网络输出的 $\phi$ 在时间上是离散跳跃的，自动微分计算出的瞬时导数可能与大步长差分完全不一致。*
+$$
+H(\phi) := \frac{\delta \mathcal{K}(\phi)}{\delta \phi}
+= 4\sigma \frac{4}{|\nabla\phi|^6}
+\left(
+\phi_x(\phi_x^2\phi_y^2 - \phi_y^4),\,
+\phi_y(\phi_x^2\phi_y^2 - \phi_x^4)
+\right). \tag{2.5}
+$$
 
-*   **正确的写法 (逼近离散动力学 - Backward Euler)**：
-    $$ \text{Loss} = || \frac{\hat{\phi}_{n+1} - \phi_n}{\Delta t_{\text{large}}} - \text{RHS}(\hat{\phi}_{n+1}) ||^2 $$
-    *   这里 $\text{RHS}$ 里的各项（如拉普拉斯算子、非线性项）都应该作用在预测值 $\hat{\phi}_{n+1}$ 上。
-    *   这相当于强迫神经网络学会做一个“隐式欧拉步”。
+For convenience, we only consider that the equations (2.1) and (2.2) are subject to the Neumann boundary conditions
 
-### 总结
+$$
+\frac{\partial \phi}{\partial n}\bigg|_{\partial\Omega} = 0, \qquad
+\frac{\partial T}{\partial n}\bigg|_{\partial\Omega} = 0, \tag{2.6}
+$$
 
-你可以放心地在 FNO 训练中使用比 FEniCS 模拟大得多的时间步（例如大 10-50 倍）。只要你的 Loss 函数正确地反映了**离散时间步长下的物理约束**（即使用差分形式而非微分形式），模型就能学得很好且非常稳定。
+although other boundary conditions such as periodic conditions are possible.

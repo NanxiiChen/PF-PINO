@@ -70,45 +70,6 @@ class MixedConv2d(eqx.Module):
     def __call__(self, x):
         return self.conv_1x1(x) + self.conv_3x3(x)
 
-class UNetBypassBlock(eqx.Module):
-    enc: eqx.nn.Conv2d
-    bottleneck: eqx.nn.Conv2d
-    dec: eqx.nn.Conv2d
-    activation: Callable = jax.nn.relu
-
-    def __init__(self, in_channels, out_channels, activation, key):
-        k1, k2, k3 = jax.random.split(key, 3)
-        mid = out_channels // 2
-        
-        # 下采样卷积 (Stride=2)
-        self.enc = eqx.nn.Conv2d(in_channels, mid, kernel_size=3, stride=2, padding=1, key=k1)
-        
-        # 底部卷积
-        self.bottleneck = eqx.nn.Conv2d(mid, mid, kernel_size=3, padding=1, key=k2)
-        
-        # 上采样后的融合卷积 (输入是 bottleneck输出 + 原始输入x)
-        # 注意：这里我们利用 x 作为 skip connection
-        self.dec = eqx.nn.Conv2d(mid + in_channels, out_channels, kernel_size=3, padding=1, key=k3)
-        self.activation = activation
-
-    def __call__(self, x):
-        # x: (C, H, W)
-        
-        # 1. Downsample
-        x_down = self.activation(self.enc(x)) # (mid, H/2, W/2)
-        
-        # 2. Bottleneck
-        x_bot = self.activation(self.bottleneck(x_down)) # (mid, H/2, W/2)
-        
-        # 3. Upsample
-        x_up = jax.image.resize(x_bot, (x_bot.shape[0], x.shape[1], x.shape[2]), method='bilinear') # (mid, H, W)
-        
-        # 4. Skip Connection (Concatenate with original input)
-        x_cat = jnp.concatenate([x_up, x], axis=0) # (mid + C, H, W)
-        
-        # 5. Final Conv
-        return self.dec(x_cat)
-
 
 class FNOBlock2d(eqx.Module):
     spectral_conv: SpectralConv2d
@@ -167,5 +128,8 @@ class FNO2d(AutoRegressiveModel2d):
         x = self.projection(x)
         x = (x + jnp.flip(x, axis=-2)) / 2.0
         x = (x + jnp.flip(x, axis=-1)) / 2.0
+        phi, T = jnp.split(x, 2, axis=0)
+        phi = jnp.tanh(phi)
+        x = jnp.concatenate([phi, T], axis=0)
         return x
                  
