@@ -55,9 +55,9 @@ class SpectralConv2d(eqx.Module):
 
 class MixedConv2d(eqx.Module):
     """
-    混合尺度卷积模块：并行执行 1x1 和 3x3 卷积。
-    - 1x1 卷积：类似于全连接层，负责通道间的信息融合，有助于捕捉极高频的点特征。
-    - 3x3 卷积：负责捕捉局部空间纹理和边缘信息。
+    Mixed Scale Convolution Module: performs 1x1 and 3x3 convolutions in parallel.
+    - 1x1 Convolution: acts like a fully connected layer, facilitating inter-channel information fusion, helping to capture very high-frequency point features.
+    - 3x3 Convolution: captures local spatial textures and edge information.
     """
     conv_1x1: eqx.nn.Conv2d
     conv_3x3: eqx.nn.Conv2d
@@ -130,6 +130,8 @@ class FNO2d(AutoRegressiveModel2d):
         x = (x + jnp.flip(x, axis=-1)) / 2.0
         phi, T = jnp.split(x, 2, axis=0)
         phi = jnp.tanh(phi)
+        T = T / 3 - 0.3
         x = jnp.concatenate([phi, T], axis=0)
         return x
-                 
+ 
+

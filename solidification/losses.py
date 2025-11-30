@@ -98,7 +98,17 @@ class Losses:
                  ys: jnp.ndarray,
                  **kwargs) -> jnp.ndarray:
         y_pred = vmap(model.forward)(xs)
-        loss = jnp.mean((y_pred - ys) ** 2)
+        # loss = jnp.mean((y_pred - ys) ** 2)
+        phi_pred = y_pred[:, 0, :, :]
+        phi_true = ys[:, 0, :, :]
+        T_pred = y_pred[:, 1, :, :]
+        T_true = ys[:, 1, :, :]
+        loss_phi = jnp.mean((phi_pred - phi_true) ** 2)
+        loss_T = jnp.mean((T_pred - T_true) ** 2)
+        loss = loss_phi + loss_T * 4.0
+        # phi in (-1, 1)
+        # T in (-0.6, 0.05)
+        # So the T loss is scaled up by 4.0 to balance the two components
         return loss, {}
     
     @classmethod
@@ -232,6 +242,59 @@ class Losses:
             dphi_dt = (phi - phi0) / dt / configs.Tc
             residual = (
                 dT_dt - configs.D_val * lap_T - k * h_prime * dphi_dt
+            )
+
+            return residual / configs.TEM_PRE_SCALE
+        
+        residuals = vmap(residual_fn, in_axes=(0, 0, None, None, None))(xs, ks, dx, dy, dt)
+        loss = jnp.mean(jnp.square(residuals))
+        return loss, {}
+    
+    @classmethod
+    def ac_tem_loss(cls,
+                model: AutoRegressiveModel2d,
+                xs: jnp.ndarray,
+                ks: jnp.ndarray,
+                dx: float,
+                dy: float,
+                dt: float,
+                configs: Configs,
+                **kwargs) -> jnp.ndarray:
+
+        """
+        Merge Allen-Cahn and Temperature equation losses using the same dphi/dt term
+        """
+        
+        def residual_fn(x, k, dx, dy, dt):
+            pred = model.forward(x)
+
+            phi0 = x[0, :, :]
+            T0 = x[1, :, :]
+
+            phi = pred[0, :, :]
+            T = pred[1, :, :]
+
+            dphi_dt = (phi - phi0) / dt / configs.Tc
+            dT_dt = (T - T0) / dt / configs.Tc
+            nabla_phi = FDM2d.nabla(phi, dx, dy) / configs.Lc # shape: (2, H, W)
+            grad_phi_x = nabla_phi[0, :, :]
+            grad_phi_y = nabla_phi[1, :, :]
+            grad_phi_2 = grad_phi_x**2 + grad_phi_y**2
+            kappa_val = cls.kappa(grad_phi_x, grad_phi_y, configs.sigma) # shape: (H, W)
+            H = cls.H(grad_phi_x, grad_phi_y, configs.sigma) # shape: (2, H, W)
+            # if necessary, stop gradient on kappa
+            vec_field = kappa_val**2 * nabla_phi + kappa_val * grad_phi_2 * H  # shape: (2, H, W)
+            div_term = FDM2d.divergence(vec_field, dx, dy) / configs.Lc # shape: (H, W)
+            F_prime = phi**3 - phi  # shape: (H, W)
+            h_prime = phi**4 - 2 * phi**2 + 1  # shape: (H, W)
+
+            lap_T = FDM2d.laplacian(T, dx, dy) / configs.Lc**2
+
+            residual = (
+                dT_dt - configs.D_val * lap_T 
+                + k * h_prime / configs.rho_val * (-div_term)
+                + k * h_prime / configs.rho_val * (F_prime / (configs.epsilon ** 2))
+                + k * h_prime / configs.rho_val * (configs.lam / configs.epsilon * h_prime * T)
             )
 
             return residual / configs.TEM_PRE_SCALE

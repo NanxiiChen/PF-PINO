@@ -35,8 +35,8 @@ def get_model2d(model_type, in_channels, out_channels, **kwargs):
             key=key
         )
     
-    elif model_type.lower() == 'fnounet':
-        from .fno2d import FNOUNet2d
+    elif model_type.lower() == 'ufno':
+        from .fno2d import UFNO2d
         # FNO-UNet model parameters
         modes_x = kwargs.get('modes_x', 16)
         modes_y = kwargs.get('modes_y', 16)
@@ -44,7 +44,7 @@ def get_model2d(model_type, in_channels, out_channels, **kwargs):
         depth = kwargs.get('depth', 4)
         activation = kwargs.get('activation', jax.nn.gelu)
 
-        return FNOUNet2d(
+        return UFNO2d(
             in_channels=in_channels,
             out_channels=out_channels,
             modes_x=modes_x,

@@ -159,7 +159,7 @@ def main():
                     model, loss_fn,
                     opt_state, optimizer, 
                     train_batch_x, train_batch_y,
-                    dx=dx, dy=dy, ks=train_batch_x[:, 2:, ...],
+                    dx=dx, dy=dy, ks=train_batch_x[:, 2, 0, 0],
                     dt=dt, configs=configs,
                     pde_name=pde_name,
                 )
@@ -174,11 +174,13 @@ def main():
                     train_batch_x, train_batch_y,
                 )
                 train_loss_epoch += loss.item() * train_batch_x.shape[0]
-        train_loss_epoch /= train_x_full.shape[0]
+        # Samples may be dropped to ensure all batches have equal size
+        # So the actual number of samples used is (num_batches * batch_size)
+        train_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
         train_loss_history.append(train_loss_epoch)
         if configs.physical_residual:
-            ac_loss_epoch /= train_x_full.shape[0]
-            tem_loss_epoch /= train_x_full.shape[0]
+            ac_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
+            tem_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
         
         for val_batch_x, val_batch_y in valid_loader:
 
@@ -186,7 +188,7 @@ def main():
                                           xs=val_batch_x,
                                           ys=val_batch_y,)
             val_loss_epoch += val_loss.item() * val_batch_x.shape[0]
-        val_loss_epoch /= valid_x_full.shape[0]
+        val_loss_epoch /= (valid_x_full.shape[0] // batch_size * batch_size)
         valid_loss_history.append(val_loss_epoch)
         
 

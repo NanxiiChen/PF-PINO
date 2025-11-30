@@ -39,7 +39,8 @@ class Configs:
     Tc = 1.0 # tc = t / Tc
 
     AC_PRE_SCALE = 1e4
-    TEM_PRE_SCALE = 5e1
+    TEM_PRE_SCALE = 1e1
+    T_VAR_SCALE = 2 # Tc = t / T_VAR_SCALE
 
     rho_val = 1e3        
     epsilon = 0.015          
