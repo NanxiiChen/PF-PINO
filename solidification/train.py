@@ -210,8 +210,8 @@ def main():
             test_meshes = test_meshes / configs.Lc
             dt = test_times[1] - test_times[0]
             x_test = test_solutions[:, 0, :, :, :] # (samples, channel, nx, ny)
-            steps = 200
-            y_test = test_solutions[:, 1:steps+1, :, :, :] # (samples, channel, nx, ny)
+            steps = test_solutions.shape[1]-1
+            y_test = test_solutions[:, 1:, :, :, :] # (samples, channel, nx, ny)
             auto_reg_fn = partial(
                 model.auto_reg,
                 meshes=test_meshes,

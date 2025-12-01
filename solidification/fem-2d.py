@@ -42,6 +42,8 @@ dt = 0.001
 save_dt = 0.05
 save_every = int(save_dt / dt)
 num_steps = int(T_final / dt)
+num_save_steps = num_steps // save_every + 1  # 计算实际需要保存的步数
+
 
 # 初始条件参数
 r0 = 0.05
@@ -55,7 +57,7 @@ V = FunctionSpace(mesh, 'P', 1)
 # 保存网格节点坐标（原始DOF坐标）
 mesh_points = V.tabulate_dof_coordinates()
 print(f"Mesh points shape: {mesh_points.shape}")
-np.save(f'{save_dir}/mesh_points.npy', mesh_points)
+# np.save(f'{save_dir}/mesh_points.npy', mesh_points)
 
 # 生成规则网格坐标（仿照corrosion2d方法）
 x_coords = np.linspace(-1, 1, Nx + 1)
@@ -113,56 +115,65 @@ def compute_H(grad_phi):
     Hy = coef * phi_y * (phi_y**2 * phi_x**2 - phi_x**4)
     return as_vector((Hx, Hy))
 
-# ==================== 求解器 ====================
-# 注意：这里需要传入当前的 K_val
-def solve_direct(current_K):
-    v_phi = TestFunction(V)
-    v_T = TestFunction(V)
-    phi_trial = TrialFunction(V)
-    T_trial = TrialFunction(V)
-    
-    grad_phi_n = grad(phi_n)
-    kappa_n = kappa(grad_phi_n)
-    H_n = compute_H(grad_phi_n)
-    
-    # 方程 1: Phase Field
-    df_dphi_semi = (phi_n**2 - 1) * phi_trial
-    F_phi = (
-        rho_val * (phi_trial - phi_n) / dt * v_phi * dx
-        + kappa_n**2 * dot(grad(phi_trial), grad(v_phi)) * dx
-        + kappa_n * dot(grad_phi_n, grad_phi_n) * dot(H_n, grad(v_phi)) * dx
-        + df_dphi_semi / eps**2 * v_phi * dx
-        + (lam / eps) * h_prime(phi_n) * T_n * v_phi * dx
-    )
-    
-    solve(lhs(F_phi) == rhs(F_phi), phi, 
-          solver_parameters={"linear_solver": "gmres", "preconditioner": "ilu"})
-    
-    # 方程 2: Temperature (使用传入的 current_K)
-    F_T = (
-        (T_trial - T_n) / dt * v_T * dx
-        + D_val * dot(grad(T_trial), grad(v_T)) * dx
-        - current_K * h_prime(phi_n) * (phi - phi_n) / dt * v_T * dx
-    )
-    
-    solve(lhs(F_T) == rhs(F_T), T_var, 
-          solver_parameters={"linear_solver": "gmres", "preconditioner": "ilu"})
-    
-    return phi, T_var
+
+# ==================== 求解器定义 (优化：移出循环) ====================
+# 定义一个 Constant 来存储当前的 K 值，这样就不需要重新编译表单
+K_const = Constant(0.0)
+
+v_phi = TestFunction(V)
+v_T = TestFunction(V)
+phi_trial = TrialFunction(V)
+T_trial = TrialFunction(V)
+
+grad_phi_n = grad(phi_n)
+kappa_n = kappa(grad_phi_n)
+H_n = compute_H(grad_phi_n)
+
+# 方程 1: Phase Field
+df_dphi_semi = (phi_n**2 - 1) * phi_trial
+F_phi = (
+    rho_val * (phi_trial - phi_n) / dt * v_phi * dx
+    + kappa_n**2 * dot(grad(phi_trial), grad(v_phi)) * dx
+    + kappa_n * dot(grad_phi_n, grad_phi_n) * dot(H_n, grad(v_phi)) * dx
+    + df_dphi_semi / eps**2 * v_phi * dx
+    + (lam / eps) * h_prime(phi_n) * T_n * v_phi * dx
+)
+
+# 预定义 Solver 1
+problem_phi = LinearVariationalProblem(lhs(F_phi), rhs(F_phi), phi)
+solver_phi = LinearVariationalSolver(problem_phi)
+solver_phi.parameters["linear_solver"] = "gmres"
+solver_phi.parameters["preconditioner"] = "ilu"
+
+# 方程 2: Temperature
+# 注意：这里使用 K_const 代替具体的数值
+F_T = (
+    (T_trial - T_n) / dt * v_T * dx
+    + D_val * dot(grad(T_trial), grad(v_T)) * dx
+    - K_const * h_prime(phi_n) * (phi - phi_n) / dt * v_T * dx
+)
+
+# 预定义 Solver 2
+problem_T = LinearVariationalProblem(lhs(F_T), rhs(F_T), T_var)
+solver_T = LinearVariationalSolver(problem_T)
+solver_T.parameters["linear_solver"] = "gmres"
+solver_T.parameters["preconditioner"] = "ilu"
+
 
 # ==================== 主循环 ====================
-# 初始化结果数组: [num_K, num_time_steps, num_vars, num_nodes]
-# num_vars = 2 (phi, T)
-results = np.zeros((len(K_values), num_steps + 1, 2, num_points))
-# 添加规则网格结果数组: [num_K, num_time_steps, num_vars, ny+1, nx+1]
-results_grid = np.zeros((len(K_values), num_steps + 1, 2, Ny + 1, Nx + 1))
+# 优化：只分配需要保存的时间步的空间，节省大量内存
+# results 数组如果不需要保存中间所有步，建议也减小大小或仅用于临时存储
+# 这里假设你需要保存所有 save_dt 间隔的数据
+results = np.zeros((len(K_values), num_save_steps, 2, num_points))
+results_grid = np.zeros((len(K_values), num_save_steps, 2, Ny + 1, Nx + 1))
 times = np.linspace(0, T_final, num_steps + 1)
+save_times = times[::save_every]
 
 print("="*70)
 print(f"开始计算 Mode: {mode}")
 print(f"K values: {K_values}")
-print(f"Results shape: {results.shape}")
-print(f"Results grid shape: {results_grid.shape}")
+print(f"Results shape (optimized): {results.shape}")
+print(f"Results grid shape (optimized): {results_grid.shape}")
 print("="*70)
 
 total_start_time = time.time()
@@ -170,20 +181,27 @@ total_start_time = time.time()
 for k_idx, K_val in enumerate(K_values):
     print(f"\nStarting simulation with K = {K_val} ({k_idx+1}/{len(K_values)})")
     
+    # 更新方程中的 K 参数
+    K_const.assign(K_val)
+    
     # 1. 重置初始条件
     phi_n.interpolate(PhiInitial(degree=2))
     T_n.interpolate(TInitial(degree=2))
     
     # 2. 存储初始时刻 (t=0)
+    # 使用 save_idx 追踪保存的索引
+    save_idx = 0
+    
     phi_vec = phi_n.vector().get_local()
     T_vec = T_n.vector().get_local()
-    results[k_idx, 0, 0, :] = phi_vec
-    results[k_idx, 0, 1, :] = T_vec
+    results[k_idx, save_idx, 0, :] = phi_vec
+    results[k_idx, save_idx, 1, :] = T_vec
     
-    # 在规则网格上采样初始条件并存储
+    # 采样初始条件
     sampled_init = np.array([(phi_n(float(px), float(py)), T_n(float(px), float(py))) for px, py in grid_points])
-    # sampled_init shape -> (num_grid, 2) ; reshape to (2, ny+1, nx+1)
-    results_grid[k_idx, 0] = sampled_init.reshape((Ny + 1, Nx + 1, 2)).transpose(2, 0, 1)
+    results_grid[k_idx, save_idx] = sampled_init.reshape((Ny + 1, Nx + 1, 2)).transpose(2, 0, 1)
+    
+    save_idx += 1
     
     # 3. 时间步进
     t = 0.0
@@ -192,27 +210,30 @@ for k_idx, K_val in enumerate(K_values):
     for n in range(num_steps):
         t += dt
         
-        # 求解
-        phi, T_var = solve_direct(K_val)
+        # 求解 (直接调用预定义的求解器)
+        solver_phi.solve()
+        solver_T.solve()
         
-        # 存储结果
-        phi_vec = phi.vector().get_local()
-        T_vec = T_var.vector().get_local()
-        results[k_idx, n + 1, 0, :] = phi_vec
-        results[k_idx, n + 1, 1, :] = T_vec
-        
-        # 在规则网格上采样解决方案并存储
-        sampled = np.array([(phi(float(px), float(py)), T_var(float(px), float(py))) for px, py in grid_points])
-        # sampled.shape == (num_grid, 2)
-        results_grid[k_idx, n + 1] = sampled.reshape((Ny + 1, Nx + 1, 2)).transpose(2, 0, 1)
-        
+        # 仅在需要保存时进行采样和存储 (性能提升的关键)
+        if (n + 1) % save_every == 0:
+            # 存储 DOF 结果
+            phi_vec = phi.vector().get_local()
+            T_vec = T_var.vector().get_local()
+            results[k_idx, save_idx, 0, :] = phi_vec
+            results[k_idx, save_idx, 1, :] = T_vec
+            
+            # 在规则网格上采样 (最耗时的操作，现在频率降低了50倍)
+            sampled = np.array([(phi(float(px), float(py)), T_var(float(px), float(py))) for px, py in grid_points])
+            results_grid[k_idx, save_idx] = sampled.reshape((Ny + 1, Nx + 1, 2)).transpose(2, 0, 1)
+            
+            save_idx += 1
+            
+            # 打印进度
+            print(f"  Step {n+1}/{num_steps}, t={t:.3f}, Saved frame {save_idx}/{num_save_steps}")
+
         # 更新历史值
         phi_n.assign(phi)
         T_n.assign(T_var)
-        
-        # 打印进度
-        if (n + 1) % 50 == 0:
-            print(f"  Step {n+1}/{num_steps}, t={t:.3f}")
 
     print(f"Completed K = {K_val}, Time: {time.time() - case_start_time:.1f}s")
 
@@ -220,12 +241,8 @@ for k_idx, K_val in enumerate(K_values):
 print("="*70)
 print("Saving results...")
 
-# np.save(f'{save_dir}/solutions.npy', results)
-np.save(f'{save_dir}/solutions_grid.npy', results_grid[:, ::save_every, :, :])
-np.save(f'{save_dir}/solutions_grid_complete.npy', results_grid)
+np.save(f'{save_dir}/solutions_grid.npy', results_grid) 
 np.save(f'{save_dir}/K_values.npy', K_values)
-np.save(f'{save_dir}/times.npy', times[::save_every])
+np.save(f'{save_dir}/times.npy', save_times)
 
 print(f"Results saved to {save_dir}")
-print(f"Original solutions shape: {results.shape}")
-print(f"Grid solutions shape: {results_grid.shape}")
