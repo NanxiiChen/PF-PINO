@@ -9,8 +9,8 @@ parameters["form_compiler"]["cpp_optimize"] = True
 set_log_level(LogLevel.ERROR)
 
 # ==================== 模式设置 ====================
-# mode = 'train_valid'
-mode = 'test'
+mode = 'train_valid'
+# mode = 'test'
 
 if mode == 'train_valid':
     K_values = [0.8, 1.0, 1.2, 1.4]
@@ -38,7 +38,9 @@ D_val = 2.5e-3
 # 数值参数 (保持不变)
 Nx, Ny = 128, 128    
 T_final = 10       
-dt = 0.05           
+dt = 0.001           
+save_dt = 0.05
+save_every = int(save_dt / dt)
 num_steps = int(T_final / dt)
 
 # 初始条件参数
@@ -218,10 +220,11 @@ for k_idx, K_val in enumerate(K_values):
 print("="*70)
 print("Saving results...")
 
-np.save(f'{save_dir}/solutions.npy', results)
-np.save(f'{save_dir}/solutions_grid.npy', results_grid)
+# np.save(f'{save_dir}/solutions.npy', results)
+np.save(f'{save_dir}/solutions_grid.npy', results_grid[:, ::save_every, :, :])
+np.save(f'{save_dir}/solutions_grid_complete.npy', results_grid)
 np.save(f'{save_dir}/K_values.npy', K_values)
-np.save(f'{save_dir}/times.npy', times)
+np.save(f'{save_dir}/times.npy', times[::save_every])
 
 print(f"Results saved to {save_dir}")
 print(f"Original solutions shape: {results.shape}")
