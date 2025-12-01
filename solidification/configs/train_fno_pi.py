@@ -32,8 +32,8 @@ class Configs:
     save_dir = f"./solidification/runs/FNO-PI/"
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
-    data_dir = "./solidification/data/train_valid/"
-    test_data_dir = "./solidification/data/test/"
+    data_dir = "./solidification/data-semi-imp-lessk/train_valid/"
+    test_data_dir = "./solidification/data-semi-imp-lessk/test/"
 
     Lc = 1.0 # xc = x / Lc
     Tc = 1.0 # tc = t / Tc

@@ -150,8 +150,8 @@ def main():
         f.write("Epoch,TestMSE\n")
     
     for epoch in range(configs.epochs):
-        # pde_name = "ac" if epoch % 1000 < 500 else "ch"
-        pde_name = "both"
+        pde_name = "ac" if epoch % 50 < 25 else "tem"
+        # pde_name = "both"
         shuffle_key, train_key, valid_key = jax.random.split(shuffle_key, 3)
         train_loader = dataloader(train_key, train_x_full, train_y_full, batch_size=batch_size, down_scale=configs.down_scale)
         valid_loader = dataloader(valid_key, valid_x_full, valid_y_full, batch_size=batch_size, down_scale=1)
@@ -170,8 +170,16 @@ def main():
                     pde_name=pde_name,
                 )
                 train_loss_epoch += loss_components[0].item() * train_batch_x.shape[0]
-                ac_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
-                tem_loss_epoch += loss_components[2].item() * train_batch_x.shape[0]
+                if pde_name == "both":
+                    ac_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
+                    tem_loss_epoch += loss_components[2].item() * train_batch_x.shape[0]
+                elif pde_name == "ac":
+                    ac_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
+                elif pde_name == "tem":
+                    tem_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
+                else:
+                    raise ValueError(f"Unknown pde_name: {pde_name}")
+
 
             else:
                 model, opt_state, loss = train_step(
@@ -197,10 +205,14 @@ def main():
         val_loss_epoch /= (valid_x_full.shape[0] // batch_size * batch_size)
         valid_loss_history.append(val_loss_epoch)
         
-
         with open(os.path.join(savedir, "logs.csv"), "a") as f:
-            f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss_epoch},{tem_loss_epoch}\n")
-
+            if pde_name == "both":
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss_epoch},{tem_loss_epoch}\n")
+            elif pde_name == "ac":
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss_epoch},{jnp.nan}\n")
+            elif pde_name == "tem":
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{jnp.nan},{tem_loss_epoch}\n")
+    
 
         if epoch % configs.save_every == 0 or epoch == configs.epochs - 1:
             print(

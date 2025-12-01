@@ -321,7 +321,17 @@ class Losses:
         losses = []
         grads = []
         aux_vars = {}
-        for vg in VG_FNS:
+        
+        if pde_name == "both":
+            vg_list = VG_FNS
+        elif pde_name == "ac":
+            vg_list = VG_FNS_AC
+        elif pde_name == "tem":
+            vg_list = VG_FNS_TEM
+        else:
+            raise ValueError(f"Unknown pde_name: {pde_name}")
+        
+        for vg in vg_list:
             (loss, aux_var), grad = vg(
                 model, xs, ys=ys, ks=ks, dx=dx, dy=dy, dt=dt, configs=configs
             )
@@ -330,16 +340,6 @@ class Losses:
             aux_vars.update(aux_var)
 
         weights = cls.grad_norm_weights(grads)
-        # Adjust weights based on the PDE being solved
-        # if pde_name == 'ac':
-        #     weights = jnp.array([weights[0], weights[1], 0.0])
-        # elif pde_name == 'ch':
-        #     weights = jnp.array([weights[0], 0.0, weights[2]])
-        # else:
-        #     pass
-        # weights = weights.at[1].set(weights[1] / 5.0) # Scale down the AC loss weight
-        # weights = weights.at[2].set(weights[2] / 5.0) # Scale down the TEM loss weight
-    
         total_loss = jnp.sum(jnp.array(weights) * jnp.array(losses))
 
         def sum_weighted_grads(weight, grad_tree):
@@ -371,3 +371,5 @@ AC_VG  = eqx.filter_value_and_grad(Losses.ac_loss, has_aux=True)
 TEM_VG  = eqx.filter_value_and_grad(Losses.tem_loss, has_aux=True)
 
 VG_FNS = [MSE_VG, AC_VG, TEM_VG,]
+VG_FNS_AC = [MSE_VG, AC_VG,]
+VG_FNS_TEM = [MSE_VG, TEM_VG,]
