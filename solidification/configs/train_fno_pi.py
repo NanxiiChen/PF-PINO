@@ -27,9 +27,9 @@ class Configs:
     epochs = 5000
     save_every = 50
     test_every = 200
-    physical_residual = False
+    physical_residual = True
 
-    save_dir = f"./solidification/runs/FNO/"
+    save_dir = f"./solidification/runs/FNO-PI/"
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
     data_dir = "./solidification/data/train_valid/"

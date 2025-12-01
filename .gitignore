@@ -13,6 +13,7 @@ train2d.sh
 *.xdmf
 *.h5
 databackup/
+data*
 
 # C extensions
 *.so

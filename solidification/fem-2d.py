@@ -3,20 +3,29 @@ import numpy as np
 import time
 import os
 
+print(f"Current OMP_NUM_THREADS: {os.environ.get('OMP_NUM_THREADS')}")
+
+
+import argparse
+
 # 优化编译器参数
 parameters["form_compiler"]["optimize"] = True
 parameters["form_compiler"]["cpp_optimize"] = True
 set_log_level(LogLevel.ERROR)
 
 # ==================== 模式设置 ====================
-mode = 'train_valid'
-# mode = 'test'
+# mode = 'train_valid'
+# # mode = 'test'
+parser = argparse.ArgumentParser()
+parser.add_argument('--mode', type=str, default='train_valid', choices=['train_valid', 'test'], help='Select mode: train_valid or test')
+args = parser.parse_args()
+mode = args.mode
 
 if mode == 'train_valid':
-    K_values = [0.8, 1.0, 1.2, 1.4]
+    K_values = [0.8, 0.9, 1.0, 1.1, 1.2]
     save_dir = './solidification/data/train_valid'
 elif mode == 'test':
-    K_values = [0.9, 1.1, 1.3]
+    K_values = [0.85, 0.95, 1.05, 1.15]
     save_dir = './solidification/data/test'
 else:
     raise ValueError("Invalid mode")
@@ -38,7 +47,7 @@ D_val = 2.5e-3
 # 数值参数 (保持不变)
 Nx, Ny = 128, 128    
 T_final = 10       
-dt = 0.001           
+dt = 0.01          
 save_dt = 0.05
 save_every = int(save_dt / dt)
 num_steps = int(T_final / dt)

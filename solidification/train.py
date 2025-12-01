@@ -100,6 +100,12 @@ def main():
     test_meshes = jnp.transpose(test_meshes, (2, 0, 1))  # (samples, 2, nx, ny)
     test_times = jnp.load(os.path.join(configs.test_data_dir, "times.npy"))
     print(f"Test Dataset shape: solutions {test_solutions.shape}, meshes {test_meshes.shape}, ks {test_ks.shape}")
+    test_times = test_times / configs.Tc
+    test_meshes = test_meshes / configs.Lc
+    test_dt = test_times[1] - test_times[0]
+    x_test = test_solutions[:, 0, :, :, :] # (samples, channel, nx, ny)
+    steps = test_solutions.shape[1]-1
+    y_test = test_solutions[:, 1:, :, :, :] # (samples, channel, nx, ny)
 
     model_kwargs = {
         'modes_x': configs.modes_x,
@@ -205,13 +211,6 @@ def main():
             
 
         if epoch % configs.test_every == 0 or epoch == configs.epochs - 1:
-
-            test_times = test_times / configs.Tc
-            test_meshes = test_meshes / configs.Lc
-            dt = test_times[1] - test_times[0]
-            x_test = test_solutions[:, 0, :, :, :] # (samples, channel, nx, ny)
-            steps = test_solutions.shape[1]-1
-            y_test = test_solutions[:, 1:, :, :, :] # (samples, channel, nx, ny)
             auto_reg_fn = partial(
                 model.auto_reg,
                 meshes=test_meshes,
