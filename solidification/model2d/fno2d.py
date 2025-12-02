@@ -133,5 +133,5 @@ class FNO2d(AutoRegressiveModel2d):
         T = T / 3 - 0.3
         x = jnp.concatenate([phi, T], axis=0)
         return x
- 
+
 

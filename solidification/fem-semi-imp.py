@@ -21,11 +21,11 @@ args = parser.parse_args()
 mode = args.mode
 
 if mode == 'train_valid':
-    K_values = [0.8, 1.0, 1.2, 1.4]
-    save_dir = './solidification/data-semi-imp-lessk/train_valid'
+    K_values = [0.6, 0.8, 1.0, 1.2, 1.4]
+    save_dir = './solidification/data/train_valid'
 elif mode == 'test':
-    K_values = [0.9, 1.1, 1.3]
-    save_dir = './solidification/data-semi-imp-lessk/test'
+    K_values = [0.7, 0.9, 1.1, 1.3, 1.5]
+    save_dir = './solidification/data/test'
 else:
     raise ValueError("Invalid mode")
 
