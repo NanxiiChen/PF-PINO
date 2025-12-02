@@ -3,10 +3,10 @@
 We are interested in numerically solving the following anisotropic phase-field dendritic crystal growth model equations in the domain  
 $\Omega \subset \mathbb{R}^2$:
 
-$$\rho(\phi)\phi_t = -\frac{\delta E}{\delta \phi} - \frac{\lambda}{\varepsilon} h'(\phi)T, \tag{2.1}$$
+$$\rho(\phi)\phi_t = -\frac{\delta E}{\delta \phi} - \frac{\lambda}{\varepsilon} h'(\phi)T$$
 
 $$
-T_t = \nabla \cdot (D\nabla T) + K h'(\phi)\phi_t, \tag{2.2}
+T_t = \nabla \cdot (D\nabla T) + K h'(\phi)\phi_t
 $$
 
 where $\phi(x,t)$ is the phase function to label the liquid and solid phases,  
@@ -32,14 +32,14 @@ E(\phi, T) = \int_{\Omega} \left(
 \frac{1}{2}\kappa^2(\nabla\phi)|\nabla\phi|^2
 + \frac{1}{\varepsilon^2}F(\phi)
 + \frac{\lambda}{2\varepsilon K} T^2
-\right)\, dx, \tag{2.3}
+\right)\, dx
 $$
 
 where $F(\phi) = \frac14 (\phi^2 - 1)^2$ is the double-well type Ginzburg–Landau potential.  
 $\kappa(\cdot)$ in (2.3) is a function describing the anisotropic property, which takes the form [14,17]:
 
 $$
-\kappa(\nabla\phi) = 1 + \sigma\cos(m\theta), \tag{2.4}
+\kappa(\nabla\phi) = 1 + \sigma\cos(m\theta)
 $$
 
 where $m$ is a model number of anisotropy,  
@@ -67,14 +67,14 @@ H(\phi) := \frac{\delta \mathcal{K}(\phi)}{\delta \phi}
 \left(
 \phi_x(\phi_x^2\phi_y^2 - \phi_y^4),\,
 \phi_y(\phi_x^2\phi_y^2 - \phi_x^4)
-\right). \tag{2.5}
+\right)
 $$
 
 For convenience, we only consider that the equations (2.1) and (2.2) are subject to the Neumann boundary conditions
 
 $$
 \frac{\partial \phi}{\partial n}\bigg|_{\partial\Omega} = 0, \qquad
-\frac{\partial T}{\partial n}\bigg|_{\partial\Omega} = 0, \tag{2.6}
+\frac{\partial T}{\partial n}\bigg|_{\partial\Omega} = 0
 $$
 
 although other boundary conditions such as periodic conditions are possible.
