@@ -7,6 +7,7 @@ class Configs:
 
     # Model architecture settings
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
+    inception = True  # Use inception-style bypass blocks if True
 
     in_channels = 5 # phi, c, meshx, meshy, dt
     out_channels = 2 # phi, c

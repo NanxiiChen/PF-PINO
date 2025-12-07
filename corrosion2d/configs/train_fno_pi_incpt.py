@@ -7,7 +7,7 @@ class Configs:
 
     # Model architecture settings
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
-    inception = False  # Whether to use inception modules in the model
+    inception = True  # Whether to use inception modules in the model
 
     in_channels = 5 # phi, c, meshx, meshy, dt
     out_channels = 2 # phi, c
@@ -31,7 +31,7 @@ class Configs:
     test_every = 500
     physical_residual = True
 
-    save_dir = f"./corrosion2d/runs/FNO-PI/"
+    save_dir = f"./corrosion2d/runs/FNO-PI-INCPT/"
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
     data_dir = "./corrosion2d/data/train_valid/"

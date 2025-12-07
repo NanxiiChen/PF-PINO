@@ -97,6 +97,7 @@ def main():
         'depth': configs.depth,
         'activation': getattr(jax.nn, configs.activation),
         'key': jax.random.PRNGKey(0),
+        'inception': configs.inception,
     }
 
     model = get_model2d(
@@ -172,7 +173,7 @@ def main():
         for val_batch_x, val_batch_y in valid_loader:
             val_loss, _ = losses.mse_loss(model, val_batch_x, val_batch_y,)
             val_loss_epoch += val_loss.item() * val_batch_x.shape[0]
-        val_loss_epoch /= valid_x_full.shape[0]
+        val_loss_epoch /= (valid_x_full.shape[0] // batch_size * batch_size)
         valid_loss_history.append(val_loss_epoch)
         
 

@@ -54,20 +54,41 @@ class SpectralConv2d(eqx.Module):
     
 
 
+class MixedConv2d(eqx.Module):
+    """
+    Mixed Scale Convolution Module: performs 1x1 and 3x3 convolutions in parallel.
+    - 1x1 Convolution: acts like a fully connected layer, facilitating inter-channel information fusion, helping to capture very high-frequency point features.
+    - 3x3 Convolution: captures local spatial textures and edge information.
+    """
+    conv_1x1: eqx.nn.Conv2d
+    conv_3x3: eqx.nn.Conv2d
+
+    def __init__(self, in_channels, out_channels, activation, key):
+        k1, k2 = jax.random.split(key, 2)
+        self.conv_1x1 = eqx.nn.Conv2d(in_channels, out_channels, kernel_size=(1, 1), key=k1)
+        self.conv_3x3 = eqx.nn.Conv2d(in_channels, out_channels, kernel_size=(3, 3), padding=1, key=k2)
+
+    def __call__(self, x):
+        return self.conv_1x1(x) + self.conv_3x3(x)
+    
+
 class FNOBlock2d(eqx.Module):
     spectral_conv: SpectralConv2d
-    bypass_conv: eqx.nn.Conv2d
+    bypass_conv: MixedConv2d
     activation: Callable = jax.nn.relu
 
     def __init__(self, in_channels, out_channels,
-                 modes_x, modes_y, activation, key):
+                 modes_x, modes_y, activation, key, inception: bool = True):
         spec_key, bypass_key = jax.random.split(key)
         self.spectral_conv = SpectralConv2d(
             in_channels, out_channels,
             modes_x, modes_y, spec_key)
-        self.bypass_conv = eqx.nn.Conv2d(
-            in_channels, out_channels,
-            kernel_size=(1, 1), key=bypass_key)
+        self.bypass_conv = MixedConv2d(
+            in_channels, out_channels, 
+            activation, bypass_key) \
+            if inception else eqx.nn.Conv2d(
+                in_channels, out_channels,
+                kernel_size=(1, 1), key=bypass_key)
         self.activation = activation
         
     def __call__(self, x):
@@ -86,7 +107,8 @@ class FNO2d(AutoRegressiveModel2d):
                  modes_x, modes_y,
                  width, depth,
                  activation=jax.nn.relu,
-                 key=jax.random.PRNGKey(0)):
+                 key=jax.random.PRNGKey(0),
+                 inception: bool = True):
         
         lifting_key, proj_key, *block_keys = jax.random.split(key, depth + 2)
         self.lifting = eqx.nn.Conv2d(
@@ -98,7 +120,8 @@ class FNO2d(AutoRegressiveModel2d):
                 FNOBlock2d(
                     width, width,
                     modes_x, modes_y,
-                    activation, block_keys[i])
+                    activation, block_keys[i],
+                    inception=inception)
             )
         self.projection = eqx.nn.Conv2d(
             width, out_channels,
