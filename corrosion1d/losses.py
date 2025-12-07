@@ -184,13 +184,20 @@ class Losses:
                 configs: object,
                 pde_name: str = 'both',
                 **kwargs) -> jnp.ndarray:
-        # total_loss = mse_loss_value + ac_loss_value + ch_loss_value
         
-        # loss_fns = [cls.mse_loss, cls.ac_loss, cls.ch_loss]
         losses = []
         grads = []
         aux_vars = {}
-        for vg in VG_FNS:
+        if pde_name == "both":
+            vg_list = VG_FNS
+        elif pde_name == "ac":
+            vg_list = VG_FNS_AC
+        elif pde_name == "ch":
+            vg_list = VG_FNS_CH
+        else:
+            raise ValueError(f"Unknown pde_name: {pde_name}")
+        
+        for vg in vg_list:
             (loss, aux_var), grad = vg(
                 model,
                 xs,
@@ -205,17 +212,19 @@ class Losses:
             aux_vars.update(aux_var)
             
         weights = cls.grad_norm_weights(grads)
-        # Adjust weights based on the PDE being solved
-        if pde_name == 'ac':
-            weights = jnp.array([weights[0], weights[1], 0.0])
-        elif pde_name == 'ch':
-            weights = jnp.array([weights[0], 0.0, weights[2]])
-        else:
-            pass
-    
+
         total_loss = jnp.sum(jnp.array(weights) * jnp.array(losses))
-        return total_loss, (losses, weights, aux_vars)
-            
+
+        def sum_weighted_grads(weight, grad_tree):
+            return jax.tree_map(lambda g: weight * g, grad_tree)
+        
+        total_grad = jax.tree_map(lambda x: jnp.zeros_like(x), grads[0])
+        for i, g in enumerate(grads):
+            weighted_g = sum_weighted_grads(weights[i], g)
+            total_grad = jax.tree_map(lambda a, b: a + b, total_grad, weighted_g)
+
+        return (total_loss, (losses, weights, aux_vars)), total_grad
+
     @classmethod
     def grad_norm_weights(cls, grads: list, eps=1e-6):
         def tree_norm(pytree):
@@ -234,4 +243,6 @@ class Losses:
 MSE_VG = eqx.filter_value_and_grad(Losses.mse_loss, has_aux=True)
 AC_VG  = eqx.filter_value_and_grad(Losses.ac_loss, has_aux=True)
 CH_VG  = eqx.filter_value_and_grad(Losses.ch_loss, has_aux=True)
-VG_FNS = [MSE_VG, AC_VG, CH_VG]
+VG_FNS = [MSE_VG, AC_VG, CH_VG,]
+VG_FNS_AC = [MSE_VG, AC_VG,]
+VG_FNS_CH = [MSE_VG, CH_VG,]

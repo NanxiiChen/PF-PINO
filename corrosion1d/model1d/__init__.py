@@ -22,6 +22,7 @@ def get_model1d(model_type, in_channels, out_channels, **kwargs):
         width = kwargs.get('width', 64)
         depth = kwargs.get('depth', 4)
         activation = kwargs.get('activation', jax.nn.gelu)
+        inception = kwargs.get('inception', True)
         
         return FNO1d(
             in_channels=in_channels,
@@ -30,7 +31,8 @@ def get_model1d(model_type, in_channels, out_channels, **kwargs):
             width=width,
             depth=depth,
             activation=activation,
-            key=key
+            key=key,
+            inception=inception
         )
         
     elif model_type.lower() == 'fcn':

@@ -22,17 +22,17 @@ def dataloader(
 ):
     n_samples = dataset_x.shape[0]
 
-    n_batches = int(jnp.ceil(n_samples / batch_size))
+    # n_batches = int(jnp.ceil(n_samples / batch_size))
+    n_batches = n_samples // batch_size
 
     permutation = jax.random.permutation(key, n_samples)
 
     for batch_id in range(n_batches):
         start = batch_id * batch_size
-        end = min((batch_id + 1) * batch_size, n_samples)
+        end = (batch_id + 1) * batch_size
+        indices = permutation[start:end]
 
-        batch_indices = permutation[start:end]
-
-        yield dataset_x[batch_indices, ..., ::down_scale], dataset_y[batch_indices, ..., ::down_scale]
+        yield dataset_x[indices, ..., ::down_scale], dataset_y[indices, ..., ::down_scale]
 
 @eqx.filter_jit
 def train_step(model, loss_fn, state, optimizer, xs, ys, **kwargs):
@@ -46,10 +46,10 @@ def train_step(model, loss_fn, state, optimizer, xs, ys, **kwargs):
 
 @eqx.filter_jit
 def train_step_pi(model, loss_fn, state, optimizer, 
-                  xs, ys, Lps, dx, dt, configs, **kwargs):
-    (weighted_loss, (loss_components, weight_components, aux_vars)), grad = eqx.filter_value_and_grad(
-        loss_fn, has_aux=True
-    )(model, xs, ys, Lps, dx, dt, configs, **kwargs)
+                  xs, ys, Lps, dx, dt, configs, pde_name, **kwargs):
+    (weighted_loss, (loss_components, weight_components, aux_vars)), grad = loss_fn(
+        model, xs, ys, Lps, dx, dt, configs, pde_name, **kwargs
+    )
     updates, new_state = optimizer.update(grad, state, model)
     new_model = eqx.apply_updates(model, updates)
     return new_model, new_state, weighted_loss, loss_components, weight_components, aux_vars
@@ -84,6 +84,7 @@ def main():
         'depth': configs.depth,
         'activation': getattr(jax.nn, configs.activation),
         'key': jax.random.PRNGKey(0),
+        'inception': configs.inception,
     }
     
     
@@ -122,7 +123,7 @@ def main():
         f.write("Epoch,TestMSE\n")
     
     for epoch in range(configs.epochs):
-        # pde_name = "ac" if epoch % 1000 < 500 else "ch"
+        # pde_name = "ac" if epoch % 50 < 25 else "ch"
         pde_name = "both"
         shuffle_key, train_key, valid_key = jax.random.split(shuffle_key, 3)
         train_loader = dataloader(train_key, train_x_full, train_y_full, batch_size=batch_size)
@@ -142,8 +143,16 @@ def main():
                     pde_name=pde_name,
                 )
                 train_loss_epoch += loss_components[0].item() * train_batch_x.shape[0]
-                ac_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
-                ch_loss_epoch += loss_components[2].item() * train_batch_x.shape[0]
+                if pde_name == "both":
+                    ac_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
+                    ch_loss_epoch += loss_components[2].item() * train_batch_x.shape[0]
+                elif pde_name == "ac":
+                    ac_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
+                elif pde_name == "ch":
+                    ch_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
+                else:
+                    raise ValueError(f"Unknown pde_name: {pde_name}")
+
             else:
                 model, opt_state, loss = train_step(
                     model, loss_fn,
@@ -152,22 +161,29 @@ def main():
                     meshes=meshes,
                 )
                 train_loss_epoch += loss.item() * train_batch_x.shape[0]
-        train_loss_epoch /= train_x_full.shape[0]
+        train_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
         train_loss_history.append(train_loss_epoch)
+        if configs.physical_residual:
+            ac_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
+            ch_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
         
         for val_batch_x, val_batch_y in valid_loader:
             val_loss, _ = losses.mse_loss(model, val_batch_x, val_batch_y, meshes=meshes,)
             val_loss_epoch += val_loss.item() * val_batch_x.shape[0]
-        val_loss_epoch /= valid_x_full.shape[0]
+        val_loss_epoch /= (valid_x_full.shape[0] // batch_size * batch_size)
         valid_loss_history.append(val_loss_epoch)
-        if configs.physical_residual:
-            ac_loss_epoch /= train_x_full.shape[0]
-            ch_loss_epoch /= train_x_full.shape[0]
-        
+
 
         with open(os.path.join(savedir, "logs.csv"), "a") as f:
-            f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss_epoch},{ch_loss_epoch}\n")
-
+            if pde_name == "both":
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss_epoch},{ch_loss_epoch}\n")
+            elif pde_name == "ac":
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss_epoch},{jnp.nan}\n")
+            elif pde_name == "ch":
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{jnp.nan},{ch_loss_epoch}\n")
+            else:
+                raise ValueError(f"Unknown pde_name: {pde_name}")
+    
         if epoch % configs.save_every == 0 or epoch == configs.epochs - 1:
             print(
                 f"Epoch {epoch}: "

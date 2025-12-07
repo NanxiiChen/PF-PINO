@@ -40,20 +40,42 @@ class SpectralConv1d(eqx.Module):
         out = jnp.fft.irfft(out_rft, n=spatial_points, axis=-1) # (out_channels, spatial_points)
         return out
     
+class MixedConv1d(eqx.Module):
+
+    conv_1: eqx.nn.Conv1d
+    conv_3: eqx.nn.Conv1d
+
+    def __init__(self, in_channels, out_channels, activation, key):
+        k1, k2 = jax.random.split(key, 2)
+        self.conv_1 = eqx.nn.Conv1d(in_channels, out_channels, 
+            kernel_size=1, key=k1)
+        self.conv_3 = eqx.nn.Conv1d(in_channels, out_channels,
+            kernel_size=3, padding=1, key=k2)
+
+    def __call__(self, x):
+        return self.conv_1(x) + self.conv_3(x)
+    
 class FNOBlock1d(eqx.Module):
     spectral_conv: SpectralConv1d
     bypass_conv: eqx.nn.Conv1d
     activation: Callable = jax.nn.relu
+    inception: bool = True
     
     def __init__(self, in_channels, out_channels,
-                 modes, activation, key):
+                 modes, activation, key, inception=True):
         spec_key, bypass_key = jax.random.split(key)
         self.spectral_conv = SpectralConv1d(
             in_channels, out_channels, 
             modes, spec_key)
-        self.bypass_conv = eqx.nn.Conv1d(
+        # self.bypass_conv = eqx.nn.Conv1d(
+        #     in_channels, out_channels,
+        #     kernel_size=1, key=bypass_key)
+        self.bypass_conv = MixedConv1d(
             in_channels, out_channels,
-            kernel_size=1, key=bypass_key)
+            activation, bypass_key) \
+            if inception else eqx.nn.Conv1d(
+                in_channels, out_channels,
+                kernel_size=1, key=bypass_key)
         self.activation = activation
         
     def __call__(self, x):
@@ -67,11 +89,13 @@ class FNO1d(AutoRegressiveModel1d):
     lifting: eqx.nn.Conv1d
     fno_blocks: List[FNOBlock1d]
     projection: eqx.nn.Conv1d
+    inception: bool = True
     
     def __init__(self, in_channels, out_channels,
                  modes, width, depth, 
                  activation=jax.nn.gelu,
-                 key=jax.random.PRNGKey(0)):
+                 key=jax.random.PRNGKey(0),
+                 inception=True):
         lifting_key, proj_key, *block_keys = jax.random.split(key, depth + 2)
         self.lifting = eqx.nn.Conv1d(
             in_channels, width,
@@ -79,7 +103,8 @@ class FNO1d(AutoRegressiveModel1d):
         self.fno_blocks = [
             FNOBlock1d(
                 width, width,
-                modes, activation, block_keys[i])
+                modes, activation, block_keys[i],
+                inception=inception)
             for i in range(depth)
         ]
         self.projection = eqx.nn.Conv1d(

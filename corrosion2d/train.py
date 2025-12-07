@@ -55,9 +55,9 @@ def train_step(model, loss_fn, state, optimizer, xs, ys, **kwargs):
 
 @eqx.filter_jit
 def train_step_pi(model, loss_fn, state, optimizer, 
-                  xs, ys, dx, dy, dt, configs, **kwargs):
+                  xs, ys, dx, dy, dt, configs, pde_name, **kwargs):
     (weighted_loss, (loss_components, weight_components, aux_vars)), grad = loss_fn(
-        model, xs, ys, dx, dy, dt, configs, **kwargs
+        model, xs, ys, dx, dy, dt, configs, pde_name, **kwargs
     )
     updates, new_state = optimizer.update(grad, state, model)
     new_model = eqx.apply_updates(model, updates)
@@ -134,8 +134,8 @@ def main():
         f.write("Epoch,TestMSE\n")
     
     for epoch in range(configs.epochs):
-        # pde_name = "ac" if epoch % 1000 < 500 else "ch"
-        pde_name = "both"
+        pde_name = "ac" if epoch % 50 < 25 else "ch"
+        # pde_name = "both"
         shuffle_key, train_key, valid_key = jax.random.split(shuffle_key, 3)
         train_loader = dataloader(train_key, train_x_full, train_y_full, batch_size=batch_size, down_scale=configs.down_scale)
         valid_loader = dataloader(valid_key, valid_x_full, valid_y_full, batch_size=batch_size, down_scale=1)
@@ -154,8 +154,15 @@ def main():
                     pde_name=pde_name,
                 )
                 train_loss_epoch += loss_components[0].item() * train_batch_x.shape[0]
-                ac_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
-                ch_loss_epoch += loss_components[2].item() * train_batch_x.shape[0]
+                if pde_name == "both":
+                    ac_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
+                    ch_loss_epoch += loss_components[2].item() * train_batch_x.shape[0]
+                elif pde_name == "ac":
+                    ac_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
+                elif pde_name == "ch":
+                    ch_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
+                else:
+                    raise ValueError(f"Unknown pde_name: {pde_name}")
 
             else:
                 model, opt_state, loss = train_step(
@@ -164,11 +171,11 @@ def main():
                     train_batch_x, train_batch_y,
                 )
                 train_loss_epoch += loss.item() * train_batch_x.shape[0]
-        train_loss_epoch /= train_x_full.shape[0]
+        train_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
         train_loss_history.append(train_loss_epoch)
         if configs.physical_residual:
-            ac_loss_epoch /= train_x_full.shape[0]
-            ch_loss_epoch /= train_x_full.shape[0]
+            ac_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
+            ch_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
         
         for val_batch_x, val_batch_y in valid_loader:
             val_loss, _ = losses.mse_loss(model, val_batch_x, val_batch_y,)
@@ -178,8 +185,15 @@ def main():
         
 
         with open(os.path.join(savedir, "logs.csv"), "a") as f:
-            f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss_epoch},{ch_loss_epoch}\n")
-
+            if pde_name == "both":
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss_epoch},{ch_loss_epoch}\n")
+            elif pde_name == "ac":
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss_epoch},{jnp.nan}\n")
+            elif pde_name == "ch":
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{jnp.nan},{ch_loss_epoch}\n")
+            else:
+                raise ValueError(f"Unknown pde_name: {pde_name}")
+    
 
         if epoch % configs.save_every == 0 or epoch == configs.epochs - 1:
             print(

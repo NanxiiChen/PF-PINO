@@ -43,7 +43,7 @@ class Configs:
 
 
     AC_PRE_SCALE = 1e0
-    CH_PRE_SCALE = 1e4
+    CH_PRE_SCALE = 1e5
 
     ALPHA_PHI = 9.62e-5/4
     OMEGA_PHI = 1.663e7

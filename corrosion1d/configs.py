@@ -7,6 +7,7 @@ class Configs:
     
     # Model architecture settings
     model_type = "FNO"  # Options: 'fno', 'fcn', 'unet'
+    inception = False  # Whether to use inception bypass modules
     
     in_channels = 5 # phi, c, lp, mesh, time
     out_channels = 2 # phi, c

@@ -437,12 +437,23 @@ class Losses:
                 dy: float,
                 dt: float,
                 configs: object,
+                pde_name: str = "both",
                 **kwargs):
         
         losses = []
         grads = []
         aux_vars = {}
-        for vg in VG_FNS:
+
+        if pde_name == "both":
+            vg_list = VG_FNS
+        elif pde_name == "ac":
+            vg_list = VG_FNS_AC
+        elif pde_name == "ch":
+            vg_list = VG_FNS_CH
+        else:
+            raise ValueError(f"Unknown pde_name: {pde_name}")
+        
+        for vg in vg_list:
             (loss, aux_var), grad = vg(
                 model, xs, ys=ys, dx=dx, dy=dy, dt=dt, configs=configs
             )
@@ -484,3 +495,5 @@ AC_VG  = eqx.filter_value_and_grad(Losses.ac_loss, has_aux=True)
 CH_VG  = eqx.filter_value_and_grad(Losses.ch_loss, has_aux=True)
 # BC_VG  = eqx.filter_value_and_grad(Losses.bc_loss, has_aux=True)
 VG_FNS = [MSE_VG, AC_VG, CH_VG,]
+VG_FNS_AC = [MSE_VG, AC_VG,]
+VG_FNS_CH = [MSE_VG, CH_VG,]
