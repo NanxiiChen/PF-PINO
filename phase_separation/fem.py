@@ -12,8 +12,8 @@ os.environ['OMP_NUM_THREADS'] = '16'
 print(f"Current OMP_NUM_THREADS: {os.environ.get('OMP_NUM_THREADS')}")
 
 # 设置模式和保存路径
-mode = 'train_valid'
-# mode = 'test'
+# mode = 'train_valid'
+mode = 'test'
 save_dir = './phase_separation/data/train_valid' if mode == 'train_valid' else './phase_separation/data/test'
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
