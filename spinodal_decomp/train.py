@@ -9,7 +9,6 @@ from sklearn.model_selection import train_test_split
 
 import argparse
 
-# from .configs import Configs
 from .configs import load_configs
 from .losses import Losses
 from .model2d import get_model2d
@@ -132,39 +131,39 @@ def main():
         os.makedirs(savedir)
     
     with open(os.path.join(savedir, "logs.csv"), "w") as f:
-        f.write("Epoch,TrainLoss,ValidLoss,ACLoss,TEMLoss\n")
+        f.write("Epoch,TrainLoss,ValidLoss,CHLoss,PotLoss\n")
 
     with open(os.path.join(savedir, "test_logs.csv"), "w") as f:
         f.write("Epoch,TestMSE\n")
     
     for epoch in range(configs.epochs):
-        pde_name = "ac" if epoch % 50 < 25 else "tem"
+        pde_name = "ch" if epoch % 50 < 25 else "pot"
         # pde_name = "both"
         shuffle_key, train_key, valid_key = jax.random.split(shuffle_key, 3)
         train_loader = dataloader(train_key, train_x_full, train_y_full, batch_size=batch_size, down_scale=configs.down_scale)
         valid_loader = dataloader(valid_key, valid_x_full, valid_y_full, batch_size=batch_size, down_scale=1)
         train_loss_epoch = 0.0
         val_loss_epoch = 0.0
-        ac_loss_epoch = 0.0
-        tem_loss_epoch = 0.0
+        ch_loss_epoch = 0.0
+        pot_loss_epoch = 0.0
         for train_batch_x, train_batch_y in train_loader:
             if configs.physical_residual:
                 model, opt_state, weighted_loss, loss_components, weight_components, aux_vars = train_step_pi(
                     model, loss_fn,
                     opt_state, optimizer, 
                     train_batch_x, train_batch_y,
-                    dx=dx, dy=dy, ks=train_batch_x[:, 2, 0, 0],
+                    dx=dx, dy=dy,
                     dt=dt, configs=configs,
                     pde_name=pde_name,
                 )
                 train_loss_epoch += loss_components[0].item() * train_batch_x.shape[0]
                 if pde_name == "both":
-                    ac_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
-                    tem_loss_epoch += loss_components[2].item() * train_batch_x.shape[0]
-                elif pde_name == "ac":
-                    ac_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
-                elif pde_name == "tem":
-                    tem_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
+                    ch_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
+                    pot_loss_epoch += loss_components[2].item() * train_batch_x.shape[0]
+                elif pde_name == "ch":
+                    ch_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
+                elif pde_name == "pot":
+                    pot_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
                 else:
                     raise ValueError(f"Unknown pde_name: {pde_name}")
 
@@ -181,8 +180,8 @@ def main():
         train_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
         train_loss_history.append(train_loss_epoch)
         if configs.physical_residual:
-            ac_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
-            tem_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
+            ch_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
+            pot_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
         
         for val_batch_x, val_batch_y in valid_loader:
 
@@ -195,11 +194,13 @@ def main():
         
         with open(os.path.join(savedir, "logs.csv"), "a") as f:
             if pde_name == "both":
-                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss_epoch},{tem_loss_epoch}\n")
-            elif pde_name == "ac":
-                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ac_loss_epoch},{jnp.nan}\n")
-            elif pde_name == "tem":
-                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{jnp.nan},{tem_loss_epoch}\n")
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ch_loss_epoch},{pot_loss_epoch}\n")
+            elif pde_name == "ch":
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ch_loss_epoch},{jnp.nan}\n")
+            elif pde_name == "pot":
+                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{jnp.nan},{pot_loss_epoch}\n")
+            else:
+                raise ValueError(f"Unknown pde_name: {pde_name}")
     
 
         if epoch % configs.save_every == 0 or epoch == configs.epochs - 1:

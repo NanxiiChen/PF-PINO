@@ -29,7 +29,7 @@ class Configs:
     epochs = 5000
     save_every = 50
     test_every = 200
-    physical_residual = False
+    physical_residual = True
 
     save_dir = f"./spinodal_decomp/runs/FNO-PI/" \
         if physical_residual else f"./spinodal_decomp/runs/FNO/"
@@ -41,7 +41,8 @@ class Configs:
     Lc = 1.0 # xc = x / Lc
     Tc = 1e-4 # tc = t / Tc
 
-    CH_PRE_SCALE = 1e5
+    CH_PRE_SCALE = 1e4
+    POT_PRE_SCALE = 1e0
 
     M = 1.0            # 迁移率
     epsilon = 0.01     # 界面厚度参数
