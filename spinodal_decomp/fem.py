@@ -14,7 +14,7 @@ print(f"Current OMP_NUM_THREADS: {os.environ.get('OMP_NUM_THREADS')}")
 # 设置模式和保存路径
 # mode = 'train_valid'
 mode = 'test'
-save_dir = './phase_separation/data/train_valid' if mode == 'train_valid' else './phase_separation/data/test'
+save_dir = './spinodal_decomp/data/train_valid' if mode == 'train_valid' else './spinodal_decomp/data/test'
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 

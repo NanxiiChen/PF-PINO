@@ -17,7 +17,7 @@
             ]
         },
         {
-            "name": "Python 调试程序: 1d",
+            "name": "Python 调试程序: corrosion 1d",
             "type": "debugpy",
             "request": "launch",
             "console": "integratedTerminal",
@@ -25,12 +25,24 @@
             "module": "corrosion1d.train",
         },
         {
-            "name": "Python 调试程序: 2d",
+            "name": "Python 调试程序: corrosion 2d",
             "type": "debugpy",
             "request": "launch",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "module": "corrosion2d.train",
+            "args": [
+                "--configs",
+                "train_debug"
+            ]
+        },
+        {
+            "name": "Python 调试程序: spinodal decomposition",
+            "type": "debugpy",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "module": "spinodal_decomp.train",
             "args": [
                 "--configs",
                 "train_debug"
