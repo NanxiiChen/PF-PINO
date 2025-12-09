@@ -8,8 +8,8 @@ class Configs:
     # Model architecture settings
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
 
-    in_channels = 5 # phi, c, K, meshx, meshy, dt
-    out_channels = 2 # phi, c
+    in_channels = 5 # phi, T, K, meshx, meshy
+    out_channels = 2 # phi, T
     modes_x = 16
     modes_y = 16
     width = 64
