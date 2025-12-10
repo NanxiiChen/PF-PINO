@@ -185,7 +185,7 @@ def main():
         
         for val_batch_x, val_batch_y in valid_loader:
 
-            val_loss, _ = losses.mse_loss(model, 
+            val_loss, _ = losses.mse_loss_weighted(model, 
                                           xs=val_batch_x,
                                           ys=val_batch_y,)
             val_loss_epoch += val_loss.item() * val_batch_x.shape[0]

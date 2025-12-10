@@ -15,7 +15,7 @@ class Configs:
     modes_y = 16
     width = 64
     depth = 4
-    activation = "relu"
+    activation = "gelu"
     down_scale = 1
 
 
@@ -42,7 +42,7 @@ class Configs:
     Tc = 1e-4 # tc = t / Tc
 
     CH_PRE_SCALE = 1e4
-    POT_PRE_SCALE = 1e0
+    POT_PRE_SCALE = 1e1
 
     M = 1.0            # 迁移率
     epsilon = 0.01     # 界面厚度参数

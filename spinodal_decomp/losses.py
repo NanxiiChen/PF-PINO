@@ -100,6 +100,22 @@ class Losses:
         y_pred = vmap(model.forward)(xs)
         loss = jnp.mean(jnp.square(y_pred - ys))
         return loss, {}
+    
+    @classmethod
+    def mse_loss_weighted(cls,
+                 model: AutoRegressiveModel2d,
+                 xs: jnp.ndarray,
+                 ys: jnp.ndarray,
+                 **kwargs) -> jnp.ndarray:
+        # since scale between samples may differ a lot
+        # we apply sample-wise  weighting
+        y_pred = vmap(model.forward)(xs) # shape (batch, channels, H, W)
+        sample_losses = jnp.mean(jnp.square(y_pred - ys), axis=(1,2,3))  # shape (batch,)
+        weights = 1.0 / (jnp.sqrt(sample_losses) + 1e-6)
+        weights = weights / jnp.sum(weights) * weights.shape[0]  # normalize weights to keep loss scale
+        weighted_losses = sample_losses * weights
+        loss = jnp.mean(weighted_losses)
+        return loss, {}
 
     @classmethod
     def ch_loss(cls,
@@ -130,6 +146,36 @@ class Losses:
         residuals = vmap(residual_fn, in_axes=(0, None, None, None))(xs, dx, dy, dt)
         loss = jnp.mean(jnp.square(residuals))
         return loss, {}
+
+    @classmethod
+    def bc_loss(cls,
+                model: AutoRegressiveModel2d,
+                xs: jnp.ndarray,
+                **kwargs) -> jnp.ndarray:
+        """
+        Periodic Boundary Condition Loss
+        """
+
+        def residual_fn(x):
+            pred = model.forward(x)
+
+            c = pred[0, :, :]
+            mu = pred[1, :, :]
+
+            # Left-Right BC
+            bc_lr_c = c[:, 0] - c[:, -1]
+            bc_lr_mu = mu[:, 0] - mu[:, -1]
+
+            # Top-Bottom BC
+            bc_tb_c = c[0, :] - c[-1, :]
+            bc_tb_mu = mu[0, :] - mu[-1, :]
+
+            residual = jnp.concatenate([bc_lr_c, bc_lr_mu, bc_tb_c, bc_tb_mu], axis=0)
+            return residual
+        
+        residuals = vmap(residual_fn)(xs)
+        loss = jnp.mean(jnp.square(residuals))
+        return loss, {}
     
     @classmethod
     def pot_loss(cls,
@@ -152,10 +198,11 @@ class Losses:
 
             c = pred[0, :, :]
             mu = pred[1, :, :]
-
-            f_prime = c**3 - c
+            
+            c_mid = 0.5 * (c + c0)
+            f_prime = c_mid**3 - c_mid
             lambda_param = configs.lambda_param
-            lap_c = FDM2d.laplacian(c, dx, dy) / configs.Lc**2
+            lap_c = FDM2d.laplacian(c_mid, dx, dy) / configs.Lc**2
             residual = mu - f_prime + lambda_param * lap_c
             return residual / configs.POT_PRE_SCALE
         
@@ -225,9 +272,10 @@ class Losses:
         weights = jnp.clip(weights, eps, 1 / eps)
         return jax.lax.stop_gradient(weights)
         
-MSE_VG = eqx.filter_value_and_grad(Losses.mse_loss, has_aux=True)
+MSE_VG = eqx.filter_value_and_grad(Losses.mse_loss_weighted, has_aux=True)
 CH_VG  = eqx.filter_value_and_grad(Losses.ch_loss, has_aux=True)
 POT_VG  = eqx.filter_value_and_grad(Losses.pot_loss, has_aux=True)
+# BC_VG  = eqx.filter_value_and_grad(Losses.bc_loss, has_aux=True)
 
 VG_FNS = [MSE_VG, CH_VG, POT_VG,]
 VG_FNS_CH = [MSE_VG, CH_VG,]

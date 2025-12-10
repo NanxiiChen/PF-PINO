@@ -54,18 +54,21 @@ class SpectralConv2d(eqx.Module):
     
 
 class MixedConv2d(eqx.Module):
-    """
-    Mixed Scale Convolution Module: performs 1x1 and 3x3 convolutions in parallel.
-    - 1x1 Convolution: acts like a fully connected layer, facilitating inter-channel information fusion, helping to capture very high-frequency point features.
-    - 3x3 Convolution: captures local spatial textures and edge information.
-    """
     conv_1x1: eqx.nn.Conv2d
     conv_3x3: eqx.nn.Conv2d
 
     def __init__(self, in_channels, out_channels, activation, key):
         k1, k2 = jax.random.split(key, 2)
-        self.conv_1x1 = eqx.nn.Conv2d(in_channels, out_channels, kernel_size=(1, 1), key=k1)
-        self.conv_3x3 = eqx.nn.Conv2d(in_channels, out_channels, kernel_size=(3, 3), padding=1, key=k2)
+        # 采用空洞卷积扩大感受野
+        self.conv_1x1 = eqx.nn.Conv2d(
+            in_channels, out_channels,
+            kernel_size=(1, 1), key=k1
+        )
+        self.conv_3x3 = eqx.nn.Conv2d(
+            in_channels, out_channels,
+            kernel_size=(3, 3), padding=2, 
+            dilation=2, key=k2
+        )
 
     def __call__(self, x):
         return self.conv_1x1(x) + self.conv_3x3(x)

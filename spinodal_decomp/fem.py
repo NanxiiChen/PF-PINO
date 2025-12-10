@@ -23,7 +23,7 @@ lx, ly = 1.0, 1.0  # 区域尺寸
 nx, ny = 64, 64  # 网格数
 dt = 5.0e-5        # 时间步长
 theta = 0.5        # 时间离散参数 (Crank-Nicolson)
-T = 0.01           # 总时间
+T = 5e-3           # 总时间
 num_steps = int(T / dt)
 
 # Cahn-Hilliard 参数
@@ -133,7 +133,7 @@ grid_points = np.vstack([X.ravel(), Y.ravel()]).T
 np.save(os.path.join(save_dir, 'mesh_grid_coords.npy'), grid_points.reshape((ny + 1, nx + 1, 2)))
 
 # 设置种子列表
-num_initials = 10 if mode == 'train_valid' else 5
+num_initials = 20 if mode == 'train_valid' else 5
 initial_seeds = [100 + i for i in range(num_initials)] \
     if mode == 'train_valid' \
     else [200 + i for i in range(num_initials)]
@@ -195,8 +195,8 @@ for i, seed in enumerate(initial_seeds):
             print(f"    完成步数 {step + 1}/{num_steps}")
 
 # 保存所有结果
-np.save(os.path.join(save_dir, 'solutions_initials.npy'), results)
-np.save(os.path.join(save_dir, 'solutions_grid_initials.npy'), results_grid)
+# np.save(os.path.join(save_dir, 'solutions.npy'), results)
+np.save(os.path.join(save_dir, 'solutions_grid.npy'), results_grid)
 np.save(os.path.join(save_dir, 'initial_seeds.npy'), np.array(initial_seeds))
 np.save(os.path.join(save_dir, 'times.npy'), times)
 
