@@ -59,15 +59,13 @@ class MixedConv2d(eqx.Module):
 
     def __init__(self, in_channels, out_channels, activation, key):
         k1, k2 = jax.random.split(key, 2)
-        # 采用空洞卷积扩大感受野
         self.conv_1x1 = eqx.nn.Conv2d(
             in_channels, out_channels,
             kernel_size=(1, 1), key=k1
         )
         self.conv_3x3 = eqx.nn.Conv2d(
             in_channels, out_channels,
-            kernel_size=(3, 3), padding=2, 
-            dilation=2, key=k2
+            kernel_size=(3, 3), padding=1, key=k2
         )
 
     def __call__(self, x):

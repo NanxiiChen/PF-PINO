@@ -34,6 +34,20 @@ lambda_param = epsilon**2
 # 创建网格
 mesh = RectangleMesh(Point(0, 0), Point(lx, ly), nx, ny)
 
+
+def smooth_random_field(x, y, Lx, Ly, modes=5, amp=0.05, seed=None):
+    if seed is not None:
+        np.random.seed(seed)
+    val = 0.0
+    for _ in range(modes):
+        kx = np.random.randint(1, 4)
+        ky = np.random.randint(1, 4)
+        phase = np.random.rand()*2*np.pi
+        A = np.random.randn() * amp
+        val += A * np.sin(2*np.pi*(kx*x/Lx + ky*y/Ly) + phase)
+    return val
+
+
 # 定义周期性边界条件
 class PeriodicBoundary(SubDomain):
     # 左/下边为主边，右/上边为从属边，角点只映射一次
@@ -83,11 +97,9 @@ class InitialConditions(UserExpression):
         super().__init__(**kwargs)
         self.seed = seed
         np.random.seed(seed)
-    
     def eval(self, values, x):
-        values[0] = 0.0 + 0.05 * (0.5 - np.random.rand())  # c
-        values[1] = 0.0  # mu
-    
+        values[0] = smooth_random_field(x[0], x[1], 1.0, 1.0, modes=6, amp=0.05)
+        values[1] = 0.0
     def value_shape(self):
         return (2,)
 

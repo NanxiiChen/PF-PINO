@@ -113,6 +113,7 @@ class Losses:
         sample_losses = jnp.mean(jnp.square(y_pred - ys), axis=(1,2,3))  # shape (batch,)
         weights = 1.0 / (jnp.sqrt(sample_losses) + 1e-6)
         weights = weights / jnp.sum(weights) * weights.shape[0]  # normalize weights to keep loss scale
+        weights = jax.lax.stop_gradient(weights)
         weighted_losses = sample_losses * weights
         loss = jnp.mean(weighted_losses)
         return loss, {}
@@ -272,7 +273,7 @@ class Losses:
         weights = jnp.clip(weights, eps, 1 / eps)
         return jax.lax.stop_gradient(weights)
         
-MSE_VG = eqx.filter_value_and_grad(Losses.mse_loss_weighted, has_aux=True)
+MSE_VG = eqx.filter_value_and_grad(Losses.mse_loss, has_aux=True)
 CH_VG  = eqx.filter_value_and_grad(Losses.ch_loss, has_aux=True)
 POT_VG  = eqx.filter_value_and_grad(Losses.pot_loss, has_aux=True)
 # BC_VG  = eqx.filter_value_and_grad(Losses.bc_loss, has_aux=True)

@@ -15,7 +15,7 @@ class Configs:
     modes_y = 16
     width = 64
     depth = 4
-    activation = "gelu"
+    activation = "relu"
     down_scale = 1
 
 
@@ -29,7 +29,7 @@ class Configs:
     epochs = 5000
     save_every = 50
     test_every = 200
-    physical_residual = True
+    physical_residual = False
 
     save_dir = f"./spinodal_decomp/runs/FNO-PI/" \
         if physical_residual else f"./spinodal_decomp/runs/FNO/"
