@@ -12,9 +12,22 @@ os.environ['OMP_NUM_THREADS'] = '16'
 print(f"Current OMP_NUM_THREADS: {os.environ.get('OMP_NUM_THREADS')}")
 
 # 设置模式和保存路径
-# mode = 'train_valid'
-mode = 'test'
-save_dir = './spinodal_decomp/data/train_valid' if mode == 'train_valid' else './spinodal_decomp/data/test'
+import argparse
+mode = 'train_valid'  # 默认模式
+parser = argparse.ArgumentParser()
+parser.add_argument('--mode', type=str, default='train_valid', choices=['train_valid', 'test', 'train_init_steps'],
+                    help='选择数据集模式: train_valid 或 test')
+args = parser.parse_args()
+mode = args.mode
+
+# save_dir = './spinodal_decomp/data/train_valid' if mode == 'train_valid' else './spinodal_decomp/data/test'
+if mode == 'train_valid':
+    save_dir = './spinodal_decomp/data/train_valid'
+elif mode == 'test':
+    save_dir = './spinodal_decomp/data/test'
+elif mode == 'train_init_steps':
+    save_dir = './spinodal_decomp/data/train_init_steps'
+
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
@@ -24,6 +37,8 @@ nx, ny = 64, 64  # 网格数
 dt = 5.0e-5        # 时间步长
 theta = 0.5        # 时间离散参数 (Crank-Nicolson)
 T = 5e-3           # 总时间
+if mode == 'train_init_steps':
+    T = 5e-4       # 仅初始步骤
 num_steps = int(T / dt)
 
 # Cahn-Hilliard 参数
@@ -40,8 +55,10 @@ def smooth_random_field(x, y, Lx, Ly, modes=5, amp=0.05, seed=None):
         np.random.seed(seed)
     val = 0.0
     for _ in range(modes):
-        kx = np.random.randint(1, 4)
-        ky = np.random.randint(1, 4)
+        # kx = np.random.randint(1, 3)
+        # ky = np.random.randint(1, 3)
+        kx = np.random.choice([1,2])
+        ky = np.random.choice([1,2])
         phase = np.random.rand()*2*np.pi
         A = np.random.randn() * amp
         val += A * np.sin(2*np.pi*(kx*x/Lx + ky*y/Ly) + phase)
@@ -98,7 +115,7 @@ class InitialConditions(UserExpression):
         self.seed = seed
         np.random.seed(seed)
     def eval(self, values, x):
-        values[0] = smooth_random_field(x[0], x[1], 1.0, 1.0, modes=6, amp=0.05)
+        values[0] = smooth_random_field(x[0], x[1], 1.0, 1.0, modes=3, amp=0.05)
         values[1] = 0.0
     def value_shape(self):
         return (2,)
@@ -145,10 +162,22 @@ grid_points = np.vstack([X.ravel(), Y.ravel()]).T
 np.save(os.path.join(save_dir, 'mesh_grid_coords.npy'), grid_points.reshape((ny + 1, nx + 1, 2)))
 
 # 设置种子列表
-num_initials = 20 if mode == 'train_valid' else 5
-initial_seeds = [100 + i for i in range(num_initials)] \
-    if mode == 'train_valid' \
-    else [200 + i for i in range(num_initials)]
+# num_initials = 1 if mode == 'train_valid' else 5
+if mode == 'train_valid':
+    num_initials = 20
+elif mode == 'test':
+    num_initials = 5
+elif mode == 'train_init_steps':
+    num_initials = 20
+# initial_seeds = [100 + i for i in range(num_initials)] \
+#     if mode == 'train_valid' \
+#     else [200 + i for i in range(num_initials)]
+if mode == 'train_valid':
+    initial_seeds = [100 + i for i in range(num_initials)]
+elif mode == 'test':
+    initial_seeds = [200 + i for i in range(num_initials)]
+elif mode == 'train_init_steps':
+    initial_seeds = [300 + i for i in range(num_initials)]
 
 # 初始化结果数组
 # results: 存储原始DOF (num_initials, steps, 2, num_dofs_per_var)
