@@ -53,6 +53,17 @@ class SpectralConv2d(eqx.Module):
         return jnp.fft.irfftn(out_rft, s=(size_x, size_y), axes=(-2, -1))
     
 
+def circular_pad(x, padding):
+    """
+    对输入 x 进行循环填充 (Periodic Boundary Condition)。
+    x shape: (channels, h, w)
+    """
+    if padding == 0:
+        return x
+
+    return jnp.pad(x, ((0, 0), (padding, padding), (padding, padding)), mode='wrap')
+
+
 class MixedConv2d(eqx.Module):
     conv_1x1: eqx.nn.Conv2d
     conv_3x3: eqx.nn.Conv2d
@@ -65,11 +76,18 @@ class MixedConv2d(eqx.Module):
         )
         self.conv_3x3 = eqx.nn.Conv2d(
             in_channels, out_channels,
-            kernel_size=(3, 3), padding=1, key=k2
+            kernel_size=(3, 3), padding=0, key=k2
         )
 
     def __call__(self, x):
-        return self.conv_1x1(x) + self.conv_3x3(x)
+        # 1x1 卷积不需要 padding
+        out1 = self.conv_1x1(x)
+        
+        # 3x3 卷积前先做循环填充 (padding=1)
+        x_pad = circular_pad(x, 1)
+        out2 = self.conv_3x3(x_pad)
+        
+        return out1 + out2
 
 
 class FNOBlock2d(eqx.Module):
@@ -93,6 +111,75 @@ class FNOBlock2d(eqx.Module):
         x2 = self.bypass_conv(x)
         out = x1 + x2
         return self.activation(out)
+    
+
+
+# class LightweightUNet(eqx.Module):
+#     """
+#     轻量级U-Net，专门捕获高频细节
+#     """
+#     down_conv1: eqx.nn.Conv2d
+#     down_conv2: eqx.nn.Conv2d
+#     bottleneck: eqx.nn.Conv2d
+#     up_conv1: eqx.nn.Conv2d
+#     up_conv2: eqx.nn.Conv2d
+    
+#     def __init__(self, in_channels, hidden_dim=16, key=None):
+#         """
+#         hidden_dim: 保持很小(8-16)，只捕获必要的高频信息
+#         """
+#         k1, k2, k3, k4, k5 = jax.random.split(key, 5)
+        
+#         # Encoder: 逐步下采样，增加感受野
+#         self.down_conv1 = eqx.nn.Conv2d(
+#             in_channels, hidden_dim, 
+#             kernel_size=(3, 3), padding=0, key=k1
+#         )
+#         self.down_conv2 = eqx.nn.Conv2d(
+#             hidden_dim, hidden_dim * 2,
+#             kernel_size=(3, 3), padding=0, key=k2
+#         )
+        
+#         # Bottleneck
+#         self.bottleneck = eqx.nn.Conv2d(
+#             hidden_dim * 2, hidden_dim * 2,
+#             kernel_size=(3, 3), padding=0, key=k3
+#         )
+        
+#         # Decoder: 对称上采样
+#         self.up_conv1 = eqx.nn.Conv2d(
+#             hidden_dim * 4, hidden_dim,  # *4 因为有skip connection
+#             kernel_size=(3, 3), padding=0, key=k4
+#         )
+#         self.up_conv2 = eqx.nn.Conv2d(
+#             hidden_dim * 2, in_channels,  # 输出和输入同通道
+#             kernel_size=(3, 3), padding=0, key=k5
+#         )
+    
+#     def __call__(self, x):
+#         # Encoder
+#         x1 = circular_pad(x, 1)
+#         x1 = jax.nn.relu(self.down_conv1(x1))  # (hidden_dim, H, W)
+        
+#         x2 = circular_pad(x1, 1)
+#         x2 = jax.nn.relu(self.down_conv2(x2))  # (hidden_dim*2, H, W)
+        
+#         # Bottleneck
+#         x_bottle = circular_pad(x2, 1)
+#         x_bottle = jax.nn.relu(self.bottleneck(x_bottle))  # (hidden_dim*2, H, W)
+        
+#         # Decoder with skip connections
+#         x_up1 = jnp.concatenate([x_bottle, x2], axis=0)  # Skip from encoder
+#         x_up1 = circular_pad(x_up1, 1)
+#         x_up1 = jax.nn.relu(self.up_conv1(x_up1))  # (hidden_dim, H, W)
+        
+#         x_up2 = jnp.concatenate([x_up1, x1], axis=0)  # Skip from encoder
+#         x_up2 = circular_pad(x_up2, 1)
+#         x_out = self.up_conv2(x_up2)  # (in_channels, H, W)
+        
+#         return x_out
+
+
 
 class FNO2d(AutoRegressiveModel2d):
     lifting: eqx.nn.Conv2d
@@ -127,6 +214,4 @@ class FNO2d(AutoRegressiveModel2d):
         for block in self.fno_blocks:
             x = block(x)
         x = self.projection(x)
-        return x
-
-
+        return x 
