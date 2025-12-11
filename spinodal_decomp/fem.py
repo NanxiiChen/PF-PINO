@@ -38,7 +38,7 @@ dt = 5.0e-5        # 时间步长
 theta = 0.5        # 时间离散参数 (Crank-Nicolson)
 T = 5e-3           # 总时间
 if mode == 'train_init_steps':
-    T = 5e-4       # 仅初始步骤
+    T = dt * 10     # 仅初始步骤
 num_steps = int(T / dt)
 
 # Cahn-Hilliard 参数
@@ -94,6 +94,10 @@ pb = PeriodicBoundary()
 # 定义混合函数空间 (c, mu) 并施加周期性约束
 P1 = FiniteElement("Lagrange", mesh.ufl_cell(), 1)
 ME = FunctionSpace(mesh, MixedElement([P1, P1]), constrained_domain=pb)
+
+# --- 新增: 定义用于计算初始 mu 的标量空间 ---
+V_scalar = FunctionSpace(mesh, P1, constrained_domain=pb)
+# -----------------------------------------
 
 # 定义试函数和测试函数
 dq = TrialFunction(ME)
@@ -196,7 +200,26 @@ for i, seed in enumerate(initial_seeds):
     # 初始化
     u_init = InitialConditions(seed=seed, degree=1)
     u.interpolate(u_init)
-    u0.interpolate(u_init)
+    
+    # --- 新增: 修复初始 mu (使其与 c 物理一致) ---
+    # 此时 u 中的 c 是随机的，mu 是 0。我们需要根据 c 计算一致的 mu。
+    # 求解投影问题: (mu, v) = (df/dc, v) + lambda * (grad(c), grad(v))
+    mu_proj = TrialFunction(V_scalar)
+    v_proj = TestFunction(V_scalar)
+    c_curr, _ = split(u) # 获取当前的 c (UFL 表达式)
+    
+    # 定义投影的弱形式 (分部积分处理拉普拉斯项)
+    a_init = mu_proj * v_proj * dx
+    L_init = dfdc(c_curr) * v_proj * dx - lambda_param * dot(grad(c_curr), grad(v_proj)) * dx
+    
+    mu_consistent = Function(V_scalar)
+    solve(a_init == L_init, mu_consistent)
+    
+    # 将计算出的 mu 赋值回 u 的第二个分量
+    assign(u.sub(1), mu_consistent)
+    # -------------------------------------------
+
+    u0.assign(u) # 确保 u0 也同步更新
     
     # 保存初始状态 (t=0)
     # 1. 保存 DOF
