@@ -73,7 +73,7 @@ def main():
     dy = meshes[1, 1, 0] - meshes[1, 0, 0]  # normalized
     print(f"dt: {dt}, dx: {dx}, dy: {dy}")
     train_x_full, valid_x_full, train_y_full, valid_y_full = train_test_split(
-        Xs, Ys, test_size=0.25, random_state=0
+        Xs, Ys, test_size=0.25, random_state=42, shuffle=True
     )
     jnp.savez(os.path.join(configs.data_dir, "dataset_split.npz"),
              train_x=train_x_full,
@@ -137,8 +137,12 @@ def main():
         f.write("Epoch,TestMSE\n")
     
     for epoch in range(configs.epochs):
-        pde_name = "ch" if epoch % 50 < 25 else "pot"
-        # pde_name = "both"
+        # pde_name = "ch" if epoch % 50 < 25 else "pot"
+        # pde_name = "ch"
+        if epoch % 50 >= 25 and epoch >= 1000:
+            pde_name = "pot"
+        else:
+            pde_name = "ch"
         shuffle_key, train_key, valid_key = jax.random.split(shuffle_key, 3)
         train_loader = dataloader(train_key, train_x_full, train_y_full, batch_size=batch_size, down_scale=configs.down_scale)
         valid_loader = dataloader(valid_key, valid_x_full, valid_y_full, batch_size=batch_size, down_scale=1)

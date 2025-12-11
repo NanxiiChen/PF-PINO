@@ -11,25 +11,25 @@ class Configs:
 
     in_channels = 4 # c, mu, meshx, meshy
     out_channels = 2 # c, mu
-    modes_x = 16
-    modes_y = 16
+    modes_x = 32
+    modes_y = 32
     width = 64
     depth = 4
-    activation = "relu"
+    activation = "gelu"
     down_scale = 1
 
 
-    learning_rate = 5e-4
-    decay_every = 50
+    learning_rate = 1e-3
+    decay_every = 100
     decay_rate = 0.95
-    end_value = 1e-5
+    end_value = 1e-4
     
 
-    batch_size = 128
+    batch_size = 64
     epochs = 5000
     save_every = 50
     test_every = 200
-    physical_residual = False
+    physical_residual = True
 
     save_dir = f"./spinodal_decomp/runs/FNO-PI/" \
         if physical_residual else f"./spinodal_decomp/runs/FNO/"

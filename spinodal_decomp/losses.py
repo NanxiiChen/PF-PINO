@@ -6,9 +6,67 @@ from jax.flatten_util import ravel_pytree
 from .model2d.base_model2d import AutoRegressiveModel2d
 from .configs.train_debug import Configs
 
+
+# class FDM2d:
+#     """
+#     Finite Difference Method for 2D Corrosion Modeling.
+#     """
+#     @staticmethod
+#     @eqx.filter_jit
+#     def nabla(
+#         u: jnp.ndarray,
+#         dx: float,
+#         dy: float
+#     ) -> jnp.ndarray:
+#         r"""
+#         Compute $\nabla u$ using central difference.
+#         $\nabla u = (du/dx, du/dy)$
+#         """
+#         dudx = jnp.zeros_like(u)
+#         dudy = jnp.zeros_like(u)
+
+#         # 首先，x和y坐标对应数组的列和行
+#         # 其次，y的正方向本来是向上的，但是为了和数组的索引向下对应，我们的meshy实际上也是从上到下增大的
+#         dudx = dudx.at[:, 1:-1].set((u[:, 2:] - u[:, :-2]) / (2 * dx))
+#         dudy = dudy.at[1:-1, :].set((u[2:, :] - u[:-2, :]) / (2 * dy))
+
+#         dudx = dudx.at[:, 0].set((-3*u[:, 0] + 4*u[:, 1] - u[:, 2]) / (2*dx))
+#         dudx = dudx.at[:, -1].set((3*u[:, -1] - 4*u[:, -2] + u[:, -3]) / (2*dx))
+
+#         dudy = dudy.at[0, :].set((-3*u[0, :] + 4*u[1, :] - u[2, :]) / (2*dy))
+#         dudy = dudy.at[-1, :].set((3*u[-1, :] - 4*u[-2, :] + u[-3, :]) / (2*dy))
+
+
+#         return jnp.stack([dudx, dudy], axis=0)
+    
+    
+#     @staticmethod
+#     @eqx.filter_jit
+#     def laplacian(
+#         u: jnp.ndarray,
+#         dx: float,
+#         dy: float
+#     ) -> jnp.ndarray:
+#         """
+#         Compute $\nabla^2 u$ using central difference.
+#         $\nabla^2 u = d^2u/dx^2 + d^2u/dy^2$
+#         """
+#         d2udx2 = jnp.zeros_like(u)
+#         d2udy2 = jnp.zeros_like(u)
+
+#         d2udx2 = d2udx2.at[:, 1:-1].set((u[:, 2:] - 2 * u[:, 1:-1] + u[:, :-2]) / (dx ** 2))
+#         d2udx2 = d2udx2.at[:, 0].set((2.0*u[:, 0] - 5.0*u[:, 1] + 4.0*u[:, 2] - u[:, 3]) / (dx ** 2))
+#         d2udx2 = d2udx2.at[:, -1].set((2.0*u[:, -1] - 5.0*u[:, -2] + 4.0*u[:, -3] - u[:, -4]) / (dx ** 2))
+
+#         d2udy2 = d2udy2.at[1:-1, :].set((u[2:, :] - 2 * u[1:-1, :] + u[:-2, :]) / (dy ** 2))
+#         d2udy2 = d2udy2.at[0, :].set((2.0*u[0, :] - 5.0*u[1, :] + 4.0*u[2, :] - u[3, :]) / (dy ** 2))
+#         d2udy2 = d2udy2.at[-1, :].set((2.0*u[-1, :] - 5.0*u[-2, :] + 4.0*u[-3, :] - u[-4, :]) / (dy ** 2))
+
+#         return d2udx2 + d2udy2
+
 class FDM2d:
     """
-    Finite Difference Method for 2D Corrosion Modeling.
+    Finite Difference Method for 2D Corrosion Modeling with Periodic BC.
     """
     @staticmethod
     @eqx.filter_jit
@@ -18,52 +76,27 @@ class FDM2d:
         dy: float
     ) -> jnp.ndarray:
         r"""
-        Compute $\nabla u$ using central difference.
+        Compute $\nabla u$ using central difference with periodic BC.
         $\nabla u = (du/dx, du/dy)$
         """
         dudx = jnp.zeros_like(u)
         dudy = jnp.zeros_like(u)
 
-        # 首先，x和y坐标对应数组的列和行
-        # 其次，y的正方向本来是向上的，但是为了和数组的索引向下对应，我们的meshy实际上也是从上到下增大的
+        # 内部点：中心差分
         dudx = dudx.at[:, 1:-1].set((u[:, 2:] - u[:, :-2]) / (2 * dx))
         dudy = dudy.at[1:-1, :].set((u[2:, :] - u[:-2, :]) / (2 * dy))
 
-        dudx = dudx.at[:, 0].set((-3*u[:, 0] + 4*u[:, 1] - u[:, 2]) / (2*dx))
-        dudx = dudx.at[:, -1].set((3*u[:, -1] - 4*u[:, -2] + u[:, -3]) / (2*dx))
+        # 周期边界条件
+        # x方向：左边界使用右边界的点，右边界使用左边界的点
+        dudx = dudx.at[:, 0].set((u[:, 1] - u[:, -1]) / (2 * dx))
+        dudx = dudx.at[:, -1].set((u[:, 0] - u[:, -2]) / (2 * dx))
 
-        dudy = dudy.at[0, :].set((-3*u[0, :] + 4*u[1, :] - u[2, :]) / (2*dy))
-        dudy = dudy.at[-1, :].set((3*u[-1, :] - 4*u[-2, :] + u[-3, :]) / (2*dy))
-
+        # y方向：上边界使用下边界的点，下边界使用上边界的点
+        dudy = dudy.at[0, :].set((u[1, :] - u[-1, :]) / (2 * dy))
+        dudy = dudy.at[-1, :].set((u[0, :] - u[-2, :]) / (2 * dy))
 
         return jnp.stack([dudx, dudy], axis=0)
     
-    @staticmethod
-    @eqx.filter_jit
-    def divergence(
-        vec_field: jnp.ndarray,
-        dx: float,
-        dy: float
-    ) -> jnp.ndarray:
-        r"""
-        Compute $\nabla \cdot \mathbf{F}$ using central difference.
-        $\nabla \cdot \mathbf{F} = dF_x/dx + dF_y/dy$
-        """
-        Fx = vec_field[0, :, :]
-        Fy = vec_field[1, :, :]
-
-        dFxdx = jnp.zeros_like(Fx)
-        dFydy = jnp.zeros_like(Fy)
-
-        dFxdx = dFxdx.at[:, 1:-1].set((Fx[:, 2:] - Fx[:, :-2]) / (2 * dx))
-        dFxdx = dFxdx.at[:, 0].set((-3*Fx[:, 0] + 4*Fx[:, 1] - Fx[:, 2]) / (2*dx))
-        dFxdx = dFxdx.at[:, -1].set((3*Fx[:, -1] - 4*Fx[:, -2] + Fx[:, -3]) / (2*dx))
-
-        dFydy = dFydy.at[1:-1, :].set((Fy[2:, :] - Fy[:-2, :]) / (2 * dy))
-        dFydy = dFydy.at[0, :].set((-3*Fy[0, :] + 4*Fy[1, :] - Fy[2, :]) / (2*dy))
-        dFydy = dFydy.at[-1, :].set((3*Fy[-1, :] - 4*Fy[-2, :] + Fy[-3, :]) / (2*dy))
-
-        return dFxdx + dFydy
     
     @staticmethod
     @eqx.filter_jit
@@ -73,24 +106,33 @@ class FDM2d:
         dy: float
     ) -> jnp.ndarray:
         """
-        Compute $\nabla^2 u$ using central difference.
+        Compute $\nabla^2 u$ using central difference with periodic BC.
         $\nabla^2 u = d^2u/dx^2 + d^2u/dy^2$
         """
         d2udx2 = jnp.zeros_like(u)
         d2udy2 = jnp.zeros_like(u)
 
+        # 内部点
         d2udx2 = d2udx2.at[:, 1:-1].set((u[:, 2:] - 2 * u[:, 1:-1] + u[:, :-2]) / (dx ** 2))
-        d2udx2 = d2udx2.at[:, 0].set((2.0*u[:, 0] - 5.0*u[:, 1] + 4.0*u[:, 2] - u[:, 3]) / (dx ** 2))
-        d2udx2 = d2udx2.at[:, -1].set((2.0*u[:, -1] - 5.0*u[:, -2] + 4.0*u[:, -3] - u[:, -4]) / (dx ** 2))
-
         d2udy2 = d2udy2.at[1:-1, :].set((u[2:, :] - 2 * u[1:-1, :] + u[:-2, :]) / (dy ** 2))
-        d2udy2 = d2udy2.at[0, :].set((2.0*u[0, :] - 5.0*u[1, :] + 4.0*u[2, :] - u[3, :]) / (dy ** 2))
-        d2udy2 = d2udy2.at[-1, :].set((2.0*u[-1, :] - 5.0*u[-2, :] + 4.0*u[-3, :] - u[-4, :]) / (dy ** 2))
+
+        # 周期边界条件
+        # x方向
+        d2udx2 = d2udx2.at[:, 0].set((u[:, 1] - 2.0 * u[:, 0] + u[:, -1]) / (dx ** 2))
+        d2udx2 = d2udx2.at[:, -1].set((u[:, 0] - 2.0 * u[:, -1] + u[:, -2]) / (dx ** 2))
+
+        # y方向
+        d2udy2 = d2udy2.at[0, :].set((u[1, :] - 2.0 * u[0, :] + u[-1, :]) / (dy ** 2))
+        d2udy2 = d2udy2.at[-1, :].set((u[0, :] - 2.0 * u[-1, :] + u[-2, :]) / (dy ** 2))
 
         return d2udx2 + d2udy2
 
 
 class Losses:
+    # TODO: consider adding sample-wise weight for hard samples
+    # e.g.: hard-mining loss
+    # we can select the top-k hardest samples in a batch to compute the loss
+    # say top 20% samples with highest mse loss or relative l2 error
     @classmethod
     def mse_loss(cls,
                  model: AutoRegressiveModel2d,
