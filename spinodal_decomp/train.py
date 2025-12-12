@@ -137,12 +137,8 @@ def main():
         f.write("Epoch,TestMSE\n")
     
     for epoch in range(configs.epochs):
-        # pde_name = "ch" if epoch % 50 < 25 else "pot"
+        pde_name = "ch" if epoch % 10 < 5 else "pot"
         # pde_name = "ch"
-        if epoch % 50 >= 25 and epoch >= 1000:
-            pde_name = "pot"
-        else:
-            pde_name = "ch"
         shuffle_key, train_key, valid_key = jax.random.split(shuffle_key, 3)
         train_loader = dataloader(train_key, train_x_full, train_y_full, batch_size=batch_size, down_scale=configs.down_scale)
         valid_loader = dataloader(valid_key, valid_x_full, valid_y_full, batch_size=batch_size, down_scale=1)

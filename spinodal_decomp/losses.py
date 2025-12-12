@@ -128,6 +128,57 @@ class FDM2d:
         return d2udx2 + d2udy2
 
 
+class Spectral2d:
+    """
+    Spectral Method for 2D derivatives with Periodic BC.
+    
+    This method is architecture-agnostic and works for any grid-based model 
+    (CNN, FNO, or Hybrid) as long as the physical problem has Periodic BCs.
+    It computes derivatives in the frequency domain to minimize numerical dispersion,
+    which is especially beneficial for high-frequency initial conditions.
+    """
+    @staticmethod
+    @eqx.filter_jit
+    def nabla(
+        u: jnp.ndarray,
+        dx: float,
+        dy: float
+    ) -> jnp.ndarray:
+        H, W = u.shape
+        u_hat = jnp.fft.fft2(u)
+        
+        kx = 2 * jnp.pi * jnp.fft.fftfreq(W, d=dx)
+        ky = 2 * jnp.pi * jnp.fft.fftfreq(H, d=dy)
+        
+        kx = kx[None, :]
+        ky = ky[:, None]
+        
+        dudx = jnp.real(jnp.fft.ifft2(1j * kx * u_hat))
+        dudy = jnp.real(jnp.fft.ifft2(1j * ky * u_hat))
+        
+        return jnp.stack([dudx, dudy], axis=0)
+    
+    @staticmethod
+    @eqx.filter_jit
+    def laplacian(
+        u: jnp.ndarray,
+        dx: float,
+        dy: float
+    ) -> jnp.ndarray:
+        H, W = u.shape
+        u_hat = jnp.fft.fft2(u)
+        
+        kx = 2 * jnp.pi * jnp.fft.fftfreq(W, d=dx)
+        ky = 2 * jnp.pi * jnp.fft.fftfreq(H, d=dy)
+        
+        kx = kx[None, :]
+        ky = ky[:, None]
+        
+        lap_hat = -(kx**2 + ky**2) * u_hat
+        
+        return jnp.real(jnp.fft.ifft2(lap_hat))
+
+
 class Losses:
     # TODO: consider adding sample-wise weight for hard samples
     # e.g.: hard-mining loss
@@ -180,10 +231,10 @@ class Losses:
             mu = pred[1, :, :]
 
             dc_dt = (c - c0) / dt / configs.Tc
-            lap_mu = FDM2d.laplacian(mu, dx, dy) / configs.Lc**2
+            lap_mu = Spectral2d.laplacian(mu, dx, dy) / configs.Lc**2
             M = configs.M
             residual = dc_dt - M * lap_mu
-
+            
             return residual / configs.CH_PRE_SCALE
         
         residuals = vmap(residual_fn, in_axes=(0, None, None, None))(xs, dx, dy, dt)
@@ -245,7 +296,7 @@ class Losses:
             c_mid = 0.5 * (c + c0)
             f_prime = c_mid**3 - c_mid
             lambda_param = configs.lambda_param
-            lap_c = FDM2d.laplacian(c_mid, dx, dy) / configs.Lc**2
+            lap_c = Spectral2d.laplacian(c_mid, dx, dy) / configs.Lc**2
             residual = mu - f_prime + lambda_param * lap_c
             return residual / configs.POT_PRE_SCALE
         
