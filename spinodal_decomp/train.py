@@ -82,9 +82,10 @@ def main():
              valid_y=valid_y_full)
     print(f"Train Dataset shape: x {train_x_full.shape}, y {train_y_full.shape}")
     print(f"Valid Dataset shape: x {valid_x_full.shape}, y {valid_y_full.shape}")
-    test_solutions = jnp.load(os.path.join(configs.test_data_dir, "solutions_grid.npy"))
+    test_solutions = jnp.load(os.path.join(configs.test_data_dir, "solutions_grid.npy"))[..., :-1, :-1]
     test_meshes = jnp.load(os.path.join(configs.test_data_dir, "mesh_grid_coords.npy"))
     test_meshes = jnp.transpose(test_meshes, (2, 0, 1))  # (samples, 2, nx, ny)
+    test_meshes = test_meshes[..., :-1, :-1]
     test_times = jnp.load(os.path.join(configs.test_data_dir, "times.npy"))
     print(f"Test Dataset shape: solutions {test_solutions.shape}, meshes {test_meshes.shape},")
     test_times = test_times / configs.Tc
@@ -137,8 +138,8 @@ def main():
         f.write("Epoch,TestMSE\n")
     
     for epoch in range(configs.epochs):
-        pde_name = "ch" if epoch % 10 < 5 else "pot"
-        # pde_name = "ch"
+        # pde_name = "ch" if epoch % 50 < 25 else "pot"
+        pde_name = "ch"
         shuffle_key, train_key, valid_key = jax.random.split(shuffle_key, 3)
         train_loader = dataloader(train_key, train_x_full, train_y_full, batch_size=batch_size, down_scale=configs.down_scale)
         valid_loader = dataloader(valid_key, valid_x_full, valid_y_full, batch_size=batch_size, down_scale=1)

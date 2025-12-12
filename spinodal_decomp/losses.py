@@ -7,135 +7,9 @@ from .model2d.base_model2d import AutoRegressiveModel2d
 from .configs.train_debug import Configs
 
 
-# class FDM2d:
-#     """
-#     Finite Difference Method for 2D Corrosion Modeling.
-#     """
-#     @staticmethod
-#     @eqx.filter_jit
-#     def nabla(
-#         u: jnp.ndarray,
-#         dx: float,
-#         dy: float
-#     ) -> jnp.ndarray:
-#         r"""
-#         Compute $\nabla u$ using central difference.
-#         $\nabla u = (du/dx, du/dy)$
-#         """
-#         dudx = jnp.zeros_like(u)
-#         dudy = jnp.zeros_like(u)
-
-#         # 首先，x和y坐标对应数组的列和行
-#         # 其次，y的正方向本来是向上的，但是为了和数组的索引向下对应，我们的meshy实际上也是从上到下增大的
-#         dudx = dudx.at[:, 1:-1].set((u[:, 2:] - u[:, :-2]) / (2 * dx))
-#         dudy = dudy.at[1:-1, :].set((u[2:, :] - u[:-2, :]) / (2 * dy))
-
-#         dudx = dudx.at[:, 0].set((-3*u[:, 0] + 4*u[:, 1] - u[:, 2]) / (2*dx))
-#         dudx = dudx.at[:, -1].set((3*u[:, -1] - 4*u[:, -2] + u[:, -3]) / (2*dx))
-
-#         dudy = dudy.at[0, :].set((-3*u[0, :] + 4*u[1, :] - u[2, :]) / (2*dy))
-#         dudy = dudy.at[-1, :].set((3*u[-1, :] - 4*u[-2, :] + u[-3, :]) / (2*dy))
-
-
-#         return jnp.stack([dudx, dudy], axis=0)
-    
-    
-#     @staticmethod
-#     @eqx.filter_jit
-#     def laplacian(
-#         u: jnp.ndarray,
-#         dx: float,
-#         dy: float
-#     ) -> jnp.ndarray:
-#         """
-#         Compute $\nabla^2 u$ using central difference.
-#         $\nabla^2 u = d^2u/dx^2 + d^2u/dy^2$
-#         """
-#         d2udx2 = jnp.zeros_like(u)
-#         d2udy2 = jnp.zeros_like(u)
-
-#         d2udx2 = d2udx2.at[:, 1:-1].set((u[:, 2:] - 2 * u[:, 1:-1] + u[:, :-2]) / (dx ** 2))
-#         d2udx2 = d2udx2.at[:, 0].set((2.0*u[:, 0] - 5.0*u[:, 1] + 4.0*u[:, 2] - u[:, 3]) / (dx ** 2))
-#         d2udx2 = d2udx2.at[:, -1].set((2.0*u[:, -1] - 5.0*u[:, -2] + 4.0*u[:, -3] - u[:, -4]) / (dx ** 2))
-
-#         d2udy2 = d2udy2.at[1:-1, :].set((u[2:, :] - 2 * u[1:-1, :] + u[:-2, :]) / (dy ** 2))
-#         d2udy2 = d2udy2.at[0, :].set((2.0*u[0, :] - 5.0*u[1, :] + 4.0*u[2, :] - u[3, :]) / (dy ** 2))
-#         d2udy2 = d2udy2.at[-1, :].set((2.0*u[-1, :] - 5.0*u[-2, :] + 4.0*u[-3, :] - u[-4, :]) / (dy ** 2))
-
-#         return d2udx2 + d2udy2
-
-class FDM2d:
-    """
-    Finite Difference Method for 2D Corrosion Modeling with Periodic BC.
-    """
-    @staticmethod
-    @eqx.filter_jit
-    def nabla(
-        u: jnp.ndarray,
-        dx: float,
-        dy: float
-    ) -> jnp.ndarray:
-        r"""
-        Compute $\nabla u$ using central difference with periodic BC.
-        $\nabla u = (du/dx, du/dy)$
-        """
-        dudx = jnp.zeros_like(u)
-        dudy = jnp.zeros_like(u)
-
-        # 内部点：中心差分
-        dudx = dudx.at[:, 1:-1].set((u[:, 2:] - u[:, :-2]) / (2 * dx))
-        dudy = dudy.at[1:-1, :].set((u[2:, :] - u[:-2, :]) / (2 * dy))
-
-        # 周期边界条件
-        # x方向：左边界使用右边界的点，右边界使用左边界的点
-        dudx = dudx.at[:, 0].set((u[:, 1] - u[:, -1]) / (2 * dx))
-        dudx = dudx.at[:, -1].set((u[:, 0] - u[:, -2]) / (2 * dx))
-
-        # y方向：上边界使用下边界的点，下边界使用上边界的点
-        dudy = dudy.at[0, :].set((u[1, :] - u[-1, :]) / (2 * dy))
-        dudy = dudy.at[-1, :].set((u[0, :] - u[-2, :]) / (2 * dy))
-
-        return jnp.stack([dudx, dudy], axis=0)
-    
-    
-    @staticmethod
-    @eqx.filter_jit
-    def laplacian(
-        u: jnp.ndarray,
-        dx: float,
-        dy: float
-    ) -> jnp.ndarray:
-        """
-        Compute $\nabla^2 u$ using central difference with periodic BC.
-        $\nabla^2 u = d^2u/dx^2 + d^2u/dy^2$
-        """
-        d2udx2 = jnp.zeros_like(u)
-        d2udy2 = jnp.zeros_like(u)
-
-        # 内部点
-        d2udx2 = d2udx2.at[:, 1:-1].set((u[:, 2:] - 2 * u[:, 1:-1] + u[:, :-2]) / (dx ** 2))
-        d2udy2 = d2udy2.at[1:-1, :].set((u[2:, :] - 2 * u[1:-1, :] + u[:-2, :]) / (dy ** 2))
-
-        # 周期边界条件
-        # x方向
-        d2udx2 = d2udx2.at[:, 0].set((u[:, 1] - 2.0 * u[:, 0] + u[:, -1]) / (dx ** 2))
-        d2udx2 = d2udx2.at[:, -1].set((u[:, 0] - 2.0 * u[:, -1] + u[:, -2]) / (dx ** 2))
-
-        # y方向
-        d2udy2 = d2udy2.at[0, :].set((u[1, :] - 2.0 * u[0, :] + u[-1, :]) / (dy ** 2))
-        d2udy2 = d2udy2.at[-1, :].set((u[0, :] - 2.0 * u[-1, :] + u[-2, :]) / (dy ** 2))
-
-        return d2udx2 + d2udy2
-
-
 class Spectral2d:
     """
     Spectral Method for 2D derivatives with Periodic BC.
-    
-    This method is architecture-agnostic and works for any grid-based model 
-    (CNN, FNO, or Hybrid) as long as the physical problem has Periodic BCs.
-    It computes derivatives in the frequency domain to minimize numerical dispersion,
-    which is especially beneficial for high-frequency initial conditions.
     """
     @staticmethod
     @eqx.filter_jit
@@ -180,10 +54,6 @@ class Spectral2d:
 
 
 class Losses:
-    # TODO: consider adding sample-wise weight for hard samples
-    # e.g.: hard-mining loss
-    # we can select the top-k hardest samples in a batch to compute the loss
-    # say top 20% samples with highest mse loss or relative l2 error
     @classmethod
     def mse_loss(cls,
                  model: AutoRegressiveModel2d,
@@ -242,36 +112,6 @@ class Losses:
         return loss, {}
 
     @classmethod
-    def bc_loss(cls,
-                model: AutoRegressiveModel2d,
-                xs: jnp.ndarray,
-                **kwargs) -> jnp.ndarray:
-        """
-        Periodic Boundary Condition Loss
-        """
-
-        def residual_fn(x):
-            pred = model.forward(x)
-
-            c = pred[0, :, :]
-            mu = pred[1, :, :]
-
-            # Left-Right BC
-            bc_lr_c = c[:, 0] - c[:, -1]
-            bc_lr_mu = mu[:, 0] - mu[:, -1]
-
-            # Top-Bottom BC
-            bc_tb_c = c[0, :] - c[-1, :]
-            bc_tb_mu = mu[0, :] - mu[-1, :]
-
-            residual = jnp.concatenate([bc_lr_c, bc_lr_mu, bc_tb_c, bc_tb_mu], axis=0)
-            return residual
-        
-        residuals = vmap(residual_fn)(xs)
-        loss = jnp.mean(jnp.square(residuals))
-        return loss, {}
-    
-    @classmethod
     def pot_loss(cls,
                 model: AutoRegressiveModel2d,
                 xs: jnp.ndarray,
@@ -293,16 +133,16 @@ class Losses:
             c = pred[0, :, :]
             mu = pred[1, :, :]
             
-            c_mid = 0.5 * (c + c0)
-            f_prime = c_mid**3 - c_mid
+            f_prime = c**3 - c
             lambda_param = configs.lambda_param
-            lap_c = Spectral2d.laplacian(c_mid, dx, dy) / configs.Lc**2
+            lap_c = Spectral2d.laplacian(c, dx, dy) / configs.Lc**2
             residual = mu - f_prime + lambda_param * lap_c
             return residual / configs.POT_PRE_SCALE
         
         residuals = vmap(residual_fn, in_axes=(0, None, None, None))(xs, dx, dy, dt)
         loss = jnp.mean(jnp.square(residuals))
         return loss, {}
+    
 
 
     @classmethod
@@ -369,7 +209,6 @@ class Losses:
 MSE_VG = eqx.filter_value_and_grad(Losses.mse_loss, has_aux=True)
 CH_VG  = eqx.filter_value_and_grad(Losses.ch_loss, has_aux=True)
 POT_VG  = eqx.filter_value_and_grad(Losses.pot_loss, has_aux=True)
-# BC_VG  = eqx.filter_value_and_grad(Losses.bc_loss, has_aux=True)
 
 VG_FNS = [MSE_VG, CH_VG, POT_VG,]
 VG_FNS_CH = [MSE_VG, CH_VG,]

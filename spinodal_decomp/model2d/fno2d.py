@@ -80,7 +80,6 @@ class MixedConv2d(eqx.Module):
         )
 
     def __call__(self, x):
-        # 1x1 卷积不需要 padding
         out1 = self.conv_1x1(x)
         
         # 3x3 卷积前先做循环填充 (padding=1)

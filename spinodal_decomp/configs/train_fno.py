@@ -3,7 +3,7 @@ import jax.numpy as jnp
 
 @dataclass(frozen=True)
 class Configs:
-    DEBUG_MODE = True
+    DEBUG_MODE = False
 
     # Model architecture settings
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
@@ -29,9 +29,9 @@ class Configs:
     epochs = 5000
     save_every = 50
     test_every = 200
-    physical_residual = True
+    physical_residual = False
 
-    save_dir = f"./spinodal_decomp/runs/FNO-PI/" 
+    save_dir = f"./spinodal_decomp/runs/FNO/"
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
     data_dir = "./spinodal_decomp/data/train_valid/"
