@@ -100,12 +100,16 @@ class Losses:
             c = pred[0, :, :]
             mu = pred[1, :, :]
 
-            dc_dt = (c - c0) / dt / configs.Tc
-            lap_mu = Spectral2d.laplacian(mu, dx, dy) / configs.Lc**2
-            M = configs.M
-            residual = dc_dt - M * lap_mu
+            # dc_dt = (c - c0) / dt / configs.Tc
+            # lap_mu = Spectral2d.laplacian(mu, dx, dy) / configs.Lc**2
+            # M = configs.M
+            # residual = dc_dt - M * lap_mu
+            # use conservative loss form
+            mass0 = jnp.mean(c0)
+            mass = jnp.mean(c)
+            residual = jnp.abs(mass - mass0)  # mass conservation
             
-            return residual / configs.CH_PRE_SCALE
+            return residual
         
         residuals = vmap(residual_fn, in_axes=(0, None, None, None))(xs, dx, dy, dt)
         loss = jnp.mean(jnp.square(residuals))

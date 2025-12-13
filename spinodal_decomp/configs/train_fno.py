@@ -3,7 +3,7 @@ import jax.numpy as jnp
 
 @dataclass(frozen=True)
 class Configs:
-    DEBUG_MODE = False
+    DEBUG_MODE = True
 
     # Model architecture settings
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
@@ -19,7 +19,7 @@ class Configs:
     down_scale = 1
 
 
-    learning_rate = 1e-3
+    learning_rate = 5e-4
     decay_every = 100
     decay_rate = 0.95
     end_value = 1e-4
@@ -31,11 +31,11 @@ class Configs:
     test_every = 200
     physical_residual = False
 
-    save_dir = f"./spinodal_decomp/runs/FNO/"
+    save_dir = f"/root/autodl-tmp/runs/spinodal_decomp/FNO/" 
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
-    data_dir = "./spinodal_decomp/data/train_valid/"
-    test_data_dir = "./spinodal_decomp/data/test/"
+    data_dir = "/root/autodl-tmp/data/spinodal_decomp/train_valid/"
+    test_data_dir = "/root/autodl-tmp/data/spinodal_decomp/test/"
 
     Lc = 1.0 # xc = x / Lc
     Tc = 1e-4 # tc = t / Tc
