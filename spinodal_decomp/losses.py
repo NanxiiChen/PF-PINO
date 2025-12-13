@@ -7,53 +7,8 @@ from .model2d.base_model2d import AutoRegressiveModel2d
 from .configs.train_debug import Configs
 
 
-class Spectral2d:
-    """
-    Spectral Method for 2D derivatives with Periodic BC.
-    """
-    @staticmethod
-    @eqx.filter_jit
-    def nabla(
-        u: jnp.ndarray,
-        dx: float,
-        dy: float
-    ) -> jnp.ndarray:
-        H, W = u.shape
-        u_hat = jnp.fft.fft2(u)
-        
-        kx = 2 * jnp.pi * jnp.fft.fftfreq(W, d=dx)
-        ky = 2 * jnp.pi * jnp.fft.fftfreq(H, d=dy)
-        
-        kx = kx[None, :]
-        ky = ky[:, None]
-        
-        dudx = jnp.real(jnp.fft.ifft2(1j * kx * u_hat))
-        dudy = jnp.real(jnp.fft.ifft2(1j * ky * u_hat))
-        
-        return jnp.stack([dudx, dudy], axis=0)
-    
-    @staticmethod
-    @eqx.filter_jit
-    def laplacian(
-        u: jnp.ndarray,
-        dx: float,
-        dy: float
-    ) -> jnp.ndarray:
-        H, W = u.shape
-        u_hat = jnp.fft.fft2(u)
-        
-        kx = 2 * jnp.pi * jnp.fft.fftfreq(W, d=dx)
-        ky = 2 * jnp.pi * jnp.fft.fftfreq(H, d=dy)
-        
-        kx = kx[None, :]
-        ky = ky[:, None]
-        
-        lap_hat = -(kx**2 + ky**2) * u_hat
-        
-        return jnp.real(jnp.fft.ifft2(lap_hat))
-
-
 class Losses:
+
     @classmethod
     def mse_loss(cls,
                  model: AutoRegressiveModel2d,
@@ -62,23 +17,6 @@ class Losses:
                  **kwargs) -> jnp.ndarray:
         y_pred = vmap(model.forward)(xs)
         loss = jnp.mean(jnp.square(y_pred - ys))
-        return loss, {}
-    
-    @classmethod
-    def mse_loss_weighted(cls,
-                 model: AutoRegressiveModel2d,
-                 xs: jnp.ndarray,
-                 ys: jnp.ndarray,
-                 **kwargs) -> jnp.ndarray:
-        # since scale between samples may differ a lot
-        # we apply sample-wise  weighting
-        y_pred = vmap(model.forward)(xs) # shape (batch, channels, H, W)
-        sample_losses = jnp.mean(jnp.square(y_pred - ys), axis=(1,2,3))  # shape (batch,)
-        weights = 1.0 / (jnp.sqrt(sample_losses) + 1e-6)
-        weights = weights / jnp.sum(weights) * weights.shape[0]  # normalize weights to keep loss scale
-        weights = jax.lax.stop_gradient(weights)
-        weighted_losses = sample_losses * weights
-        loss = jnp.mean(weighted_losses)
         return loss, {}
 
     @classmethod
@@ -90,65 +28,54 @@ class Losses:
                 dt: float,
                 configs: Configs,
                 **kwargs) -> jnp.ndarray:
-
-        def residual_fn(x, dx, dy, dt):
-            pred = model.forward(x)
-
-            c0 = x[0, :, :]
-            mu0 = x[1, :, :]
-
-            c = pred[0, :, :]
-            mu = pred[1, :, :]
-
-            # dc_dt = (c - c0) / dt / configs.Tc
-            # lap_mu = Spectral2d.laplacian(mu, dx, dy) / configs.Lc**2
-            # M = configs.M
-            # residual = dc_dt - M * lap_mu
-            # use conservative loss form
-            mass0 = jnp.mean(c0)
-            mass = jnp.mean(c)
-            residual = jnp.abs(mass - mass0)  # mass conservation
-            
-            return residual
         
-        residuals = vmap(residual_fn, in_axes=(0, None, None, None))(xs, dx, dy, dt)
-        loss = jnp.mean(jnp.square(residuals))
-        return loss, {}
-
-    @classmethod
-    def pot_loss(cls,
-                model: AutoRegressiveModel2d,
-                xs: jnp.ndarray,
-                dx: float,
-                dy: float,
-                dt: float,
-                configs: Configs,
-                **kwargs) -> jnp.ndarray:
-        """
-        Potential equation loss
-        """
+        nx = xs.shape[-1]
+        ny = xs.shape[-2]
+        dx_phys = dx * configs.Lc
+        dy_phys = dy * configs.Lc
+        kx = jnp.fft.fftfreq(nx, d=dx_phys) * 2 * jnp.pi
+        ky = jnp.fft.fftfreq(ny, d=dy_phys) * 2 * jnp.pi
+        KX, KY = jnp.meshgrid(kx, ky, indexing='xy')
+        K2 = KX**2 + KY**2
+        K4 = K2**2
 
         def residual_fn(x, dx, dy, dt):
             pred = model.forward(x)
 
             c0 = x[0, :, :]
-            mu0 = x[1, :, :]
-
             c = pred[0, :, :]
-            mu = pred[1, :, :]
-            
-            f_prime = c**3 - c
+
+            # use spectral type governing equations
+            dt_unit = dt * configs.Tc
+
+            # (c - c0)/dt = M * laplacian(f'(c0)) - M * lambda * bi-laplacian(c)
+            c0_hat = jnp.fft.fft2(c0)
+            c_hat = jnp.fft.fft2(c)
+            lhs_hat = (c_hat - c0_hat) / dt_unit
+
+            M = configs.M
             lambda_param = configs.lambda_param
-            lap_c = Spectral2d.laplacian(c, dx, dy) / configs.Lc**2
-            residual = mu - f_prime + lambda_param * lap_c
-            return residual / configs.POT_PRE_SCALE
+            f_prime = c0**3 - c0 # semi-implicit treatment of f'
+            f_prime_hat = jnp.fft.fft2(f_prime)
+
+            # M * laplacian(f'(c0)) -> M * (-K2) * f_prime_hat
+            term1_hat = -M * K2 * f_prime_hat
+
+            # - M * lambda * bi-laplacian(c) -> - M * lambda * (K4) * c_hat
+            term2_hat = -M * lambda_param * K4 * c_hat
+            rhs = term1_hat + term2_hat
+            residual_hat = lhs_hat - rhs
+            residual = jnp.fft.ifft2(residual_hat).real
+            return residual / configs.CH_PRE_SCALE
         
         residuals = vmap(residual_fn, in_axes=(0, None, None, None))(xs, dx, dy, dt)
         loss = jnp.mean(jnp.square(residuals))
-        return loss, {}
+        return loss, {"k2_mean": jnp.mean(K2), 
+                      "k4_mean": jnp.mean(K4), 
+                      "dx_phys": dx_phys, 
+                      "dy_phys": dy_phys, 
+                      "dt_phys": dt * configs.Tc}
     
-
-
     @classmethod
     @eqx.filter_jit
     def pi_loss(cls,
@@ -165,15 +92,7 @@ class Losses:
         losses = []
         grads = []
         aux_vars = {}
-        
-        if pde_name == "both":
-            vg_list = VG_FNS
-        elif pde_name == "ch":
-            vg_list = VG_FNS_CH
-        elif pde_name == "pot":
-            vg_list = VG_FNS_POT
-        else:
-            raise ValueError(f"Unknown pde_name: {pde_name}")
+        vg_list = VG_FNS
         
         for vg in vg_list:
             (loss, aux_var), grad = vg(
@@ -195,12 +114,11 @@ class Losses:
             total_grad = jax.tree_map(lambda a, b: a + b, total_grad, weighted_g)
             
         return (total_loss, (losses, weights, aux_vars)), total_grad
-        # return total_loss, (losses, weights, aux_vars)
-            
+
     @classmethod
     def grad_norm_weights(cls, grads: list, eps=1e-6):
         def tree_norm(pytree):
-            r, _ = ravel_pytree(pytree)   # 一次性把 pytree 展平成 1D 向量
+            r, _ = ravel_pytree(pytree)
             return jnp.linalg.norm(r)
 
         grad_norms = jnp.array([tree_norm(g) for g in grads])
@@ -212,9 +130,4 @@ class Losses:
         
 MSE_VG = eqx.filter_value_and_grad(Losses.mse_loss, has_aux=True)
 CH_VG  = eqx.filter_value_and_grad(Losses.ch_loss, has_aux=True)
-POT_VG  = eqx.filter_value_and_grad(Losses.pot_loss, has_aux=True)
-
-VG_FNS = [MSE_VG, CH_VG, POT_VG,]
-VG_FNS_CH = [MSE_VG, CH_VG,]
-VG_FNS_POT = [MSE_VG, POT_VG,]
-
+VG_FNS = [MSE_VG, CH_VG,]

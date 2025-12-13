@@ -82,10 +82,9 @@ def main():
              valid_y=valid_y_full)
     print(f"Train Dataset shape: x {train_x_full.shape}, y {train_y_full.shape}")
     print(f"Valid Dataset shape: x {valid_x_full.shape}, y {valid_y_full.shape}")
-    test_solutions = jnp.load(os.path.join(configs.test_data_dir, "solutions_grid.npy"))[..., :-1, :-1]
+    test_solutions = jnp.load(os.path.join(configs.test_data_dir, "solutions_grid.npy"))
     test_meshes = jnp.load(os.path.join(configs.test_data_dir, "mesh_grid_coords.npy"))
     test_meshes = jnp.transpose(test_meshes, (2, 0, 1))  # (samples, 2, nx, ny)
-    test_meshes = test_meshes[..., :-1, :-1]
     test_times = jnp.load(os.path.join(configs.test_data_dir, "times.npy"))
     print(f"Test Dataset shape: solutions {test_solutions.shape}, meshes {test_meshes.shape},")
     test_times = test_times / configs.Tc
@@ -132,13 +131,12 @@ def main():
         os.makedirs(savedir)
     
     with open(os.path.join(savedir, "logs.csv"), "w") as f:
-        f.write("Epoch,TrainLoss,ValidLoss,CHLoss,PotLoss\n")
+        f.write("Epoch,TrainLoss,ValidLoss,CHLoss\n")
 
     with open(os.path.join(savedir, "test_logs.csv"), "w") as f:
         f.write("Epoch,TestMSE\n")
     
     for epoch in range(configs.epochs):
-        # pde_name = "ch" if epoch % 50 < 25 else "pot"
         pde_name = "ch"
         shuffle_key, train_key, valid_key = jax.random.split(shuffle_key, 3)
         train_loader = dataloader(train_key, train_x_full, train_y_full, batch_size=batch_size, down_scale=configs.down_scale)
@@ -146,7 +144,6 @@ def main():
         train_loss_epoch = 0.0
         val_loss_epoch = 0.0
         ch_loss_epoch = 0.0
-        pot_loss_epoch = 0.0
         for train_batch_x, train_batch_y in train_loader:
             if configs.physical_residual:
                 model, opt_state, weighted_loss, loss_components, weight_components, aux_vars = train_step_pi(
@@ -158,16 +155,7 @@ def main():
                     pde_name=pde_name,
                 )
                 train_loss_epoch += loss_components[0].item() * train_batch_x.shape[0]
-                if pde_name == "both":
-                    ch_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
-                    pot_loss_epoch += loss_components[2].item() * train_batch_x.shape[0]
-                elif pde_name == "ch":
-                    ch_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
-                elif pde_name == "pot":
-                    pot_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
-                else:
-                    raise ValueError(f"Unknown pde_name: {pde_name}")
-
+                ch_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
 
             else:
                 model, opt_state, loss = train_step(
@@ -182,7 +170,6 @@ def main():
         train_loss_history.append(train_loss_epoch)
         if configs.physical_residual:
             ch_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
-            pot_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
         
         for val_batch_x, val_batch_y in valid_loader:
 
@@ -194,15 +181,7 @@ def main():
         valid_loss_history.append(val_loss_epoch)
         
         with open(os.path.join(savedir, "logs.csv"), "a") as f:
-            if pde_name == "both":
-                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ch_loss_epoch},{pot_loss_epoch}\n")
-            elif pde_name == "ch":
-                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ch_loss_epoch},{jnp.nan}\n")
-            elif pde_name == "pot":
-                f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{jnp.nan},{pot_loss_epoch}\n")
-            else:
-                raise ValueError(f"Unknown pde_name: {pde_name}")
-    
+            f.write(f"{epoch},{train_loss_epoch},{val_loss_epoch},{ch_loss_epoch}\n")
 
         if epoch % configs.save_every == 0 or epoch == configs.epochs - 1:
             print(

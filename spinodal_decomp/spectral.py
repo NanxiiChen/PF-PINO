@@ -2,6 +2,8 @@
 Cahn-Hilliard 相分离问题的 spectral 方法实现
 使用伪谱法求解，保持与 FEM 版本相同的参数设置
 python spinodal_decomp/spectral.py --mode train_valid
+python spinodal_decomp/spectral.py --mode test
+python spinodal_decomp/spectral.py --mode train_init_steps
 """
 
 import numpy as np
@@ -84,7 +86,7 @@ class InitialConditions:
 
 # 种子设置
 if mode == 'train_valid':
-    num_initials = 1
+    num_initials = 20
     initial_seeds = [100 + i for i in range(num_initials)]
 elif mode == 'test':
     num_initials = 5

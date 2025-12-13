@@ -9,8 +9,8 @@ class Configs:
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
     inception = True  # Use inception-style bypass blocks if True
 
-    in_channels = 4 # c, mu, meshx, meshy
-    out_channels = 2 # c, mu
+    in_channels = 3 # c, meshx, meshy
+    out_channels = 1 # c
     modes_x = 32
     modes_y = 32
     width = 64
@@ -29,13 +29,13 @@ class Configs:
     epochs = 5000
     save_every = 50
     test_every = 200
-    physical_residual = False
+    physical_residual = True
 
-    save_dir = f"/root/autodl-tmp/runs/spinodal_decomp/FNO-PI/" 
+    save_dir = f"/root/autodl-tmp/data/spinodal_decomp_spectra/FNO-PI/" 
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
-    data_dir = "/root/autodl-tmp/data/spinodal_decomp/train_valid/"
-    test_data_dir = "/root/autodl-tmp/data/spinodal_decomp/test/"
+    data_dir = "/root/autodl-tmp/data/spinodal_decomp_spectra/train_valid/"
+    test_data_dir = "/root/autodl-tmp/data/spinodal_decomp_spectra/test/"
 
     Lc = 1.0 # xc = x / Lc
     Tc = 1e-4 # tc = t / Tc
