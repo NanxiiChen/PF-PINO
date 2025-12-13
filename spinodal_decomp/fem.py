@@ -38,7 +38,6 @@ if not os.path.exists(save_dir):
 lx, ly = 1.0, 1.0  # 区域尺寸
 nx, ny = 64, 64  # 网格数
 dt = 5.0e-5        # 时间步长
-theta = 0.5        # 时间离散参数 (Crank-Nicolson)
 T = 5e-3           # 总时间
 if mode == 'train_init_steps':
     T = dt * 10     # 仅初始步骤
@@ -124,8 +123,8 @@ class InitialConditions(UserExpression):
         np.random.seed(seed)
         
         # --- 噪声配置 ---
-        self.num_modes = 200      # 叠加 200 个波，足够产生“乱”的感觉
-        self.k_max = 20           # 最大波数设为 20 (对应波长 0.05，接近界面厚度)
+        self.num_modes = 50      # 叠加 200 个波，足够产生“乱”的感觉
+        self.k_max = 8           # 最大波数设为 20 (对应波长 0.05，接近界面厚度)
         self.noise_amp = 0.1     # 噪声总强度
         
         # --- 预先生成并固定随机系数 ---
