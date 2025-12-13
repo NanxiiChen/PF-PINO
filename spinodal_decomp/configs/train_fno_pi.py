@@ -3,7 +3,7 @@ import jax.numpy as jnp
 
 @dataclass(frozen=True)
 class Configs:
-    DEBUG_MODE = True
+    DEBUG_MODE = False
 
     # Model architecture settings
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'

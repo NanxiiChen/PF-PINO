@@ -3,14 +3,14 @@ import jax.numpy as jnp
 
 @dataclass(frozen=True)
 class Configs:
-    DEBUG_MODE = True
+    DEBUG_MODE = False
 
     # Model architecture settings
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
     inception = True  # Use inception-style bypass blocks if True
 
-    in_channels = 4 # c, mu, meshx, meshy
-    out_channels = 2 # c, mu
+    in_channels = 3 # c, meshx, meshy
+    out_channels = 1 # c
     modes_x = 32
     modes_y = 32
     width = 64
@@ -19,7 +19,7 @@ class Configs:
     down_scale = 1
 
 
-    learning_rate = 5e-4
+    learning_rate = 1e-3
     decay_every = 100
     decay_rate = 0.95
     end_value = 1e-4
@@ -31,11 +31,11 @@ class Configs:
     test_every = 200
     physical_residual = False
 
-    save_dir = f"/root/autodl-tmp/runs/spinodal_decomp/FNO/" 
+    save_dir = f"/root/autodl-tmp/runs/spinodal_decomp/FNO/"
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
-    data_dir = "/root/autodl-tmp/data/spinodal_decomp/train_valid/"
-    test_data_dir = "/root/autodl-tmp/data/spinodal_decomp/test/"
+    data_dir = "/root/autodl-tmp/data/spinodal_decomp_spectra/train_valid/"
+    test_data_dir = "/root/autodl-tmp/data/spinodal_decomp_spectra/test/"
 
     Lc = 1.0 # xc = x / Lc
     Tc = 1e-4 # tc = t / Tc
