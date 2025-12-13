@@ -31,7 +31,7 @@ class Configs:
     test_every = 200
     physical_residual = True
 
-    save_dir = f"/root/autodl-tmp/data/spinodal_decomp_spectra/FNO-PI/" 
+    save_dir = f"/root/autodl-tmp/data/spinodal_decomp_spectra/FNO-PI/"
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
     data_dir = "/root/autodl-tmp/data/spinodal_decomp_spectra/train_valid/"
