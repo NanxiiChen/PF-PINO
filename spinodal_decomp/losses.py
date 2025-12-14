@@ -63,8 +63,8 @@ class Losses:
 
             # - M * lambda * bi-laplacian(c) -> - M * lambda * (K4) * c_hat
             term2_hat = -M * lambda_param * K4 * c_hat
-            rhs = term1_hat + term2_hat
-            residual_hat = lhs_hat - rhs
+            rhs_hat = term1_hat + term2_hat
+            residual_hat = lhs_hat - rhs_hat
             residual = jnp.fft.ifft2(residual_hat).real
             return residual / configs.CH_PRE_SCALE
         
@@ -124,6 +124,7 @@ class Losses:
         grad_norms = jnp.array([tree_norm(g) for g in grads])
         grad_norms = jnp.clip(grad_norms, eps, 1 / eps)
         weights = grad_norms[0] / (grad_norms + eps)
+        # weights = jnp.sum(grad_norms) / (grad_norms + eps)
         weights = jnp.nan_to_num(weights)
         weights = jnp.clip(weights, eps, 1 / eps)
         return jax.lax.stop_gradient(weights)

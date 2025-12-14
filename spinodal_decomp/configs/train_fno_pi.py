@@ -40,7 +40,7 @@ class Configs:
     Lc = 1.0 # xc = x / Lc
     Tc = 1e-4 # tc = t / Tc
 
-    CH_PRE_SCALE = 1e4
+    CH_PRE_SCALE = 2e4
     POT_PRE_SCALE = 1e0
 
     M = 1.0            # 迁移率

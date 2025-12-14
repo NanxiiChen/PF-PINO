@@ -19,11 +19,12 @@ mode = args.mode
 
 # 为了不覆盖 FEM 的结果，保存到 data_spectral 目录
 if mode == 'train_valid':
-    save_dir = './spinodal_decomp/data_spectral/train_valid'
+    save_dir = '/root/autodl-tmp/data/spinodal_decomp_spectra/train_valid'
 elif mode == 'test':
-    save_dir = './spinodal_decomp/data_spectral/test'
+    save_dir = '/root/autodl-tmp/data/spinodal_decomp_spectra/test'
 elif mode == 'train_init_steps':
-    save_dir = './spinodal_decomp/data_spectral/train_init_steps'
+    save_dir = '/root/autodl-tmp/data/spinodal_decomp_spectra/train_init_steps'
+
 
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
@@ -52,16 +53,16 @@ K4 = K2**2
 
 # 初始条件生成器 (复刻 FEM 逻辑)
 class InitialConditions:
-    def __init__(self, seed, lx, ly, nx, ny):
+    def __init__(self, seed, lx, ly, nx, ny, modes=100, kmax=15, amp=0.02):
         self.lx = lx
         self.ly = ly
         self.nx = nx
         self.ny = ny
         np.random.seed(seed)
         
-        self.num_modes = 100
-        self.k_max = 15
-        self.noise_amp = 0.1
+        self.num_modes = modes
+        self.k_max = kmax
+        self.noise_amp = amp
         
         self.kx_modes = np.random.randint(-self.k_max, self.k_max + 1, self.num_modes)
         self.ky_modes = np.random.randint(-self.k_max, self.k_max + 1, self.num_modes)
@@ -86,14 +87,23 @@ class InitialConditions:
 
 # 种子设置
 if mode == 'train_valid':
-    num_initials = 20
+    num_initials = 25
     initial_seeds = [100 + i for i in range(num_initials)]
+    modes = [100] * num_initials
+    kmaxs = [15] * num_initials
+
 elif mode == 'test':
     num_initials = 5
     initial_seeds = [200 + i for i in range(num_initials)]
+    # modes = [100] * num_initials
+    # kmaxs = [15] * num_initials
+    modes = [50, 100, 200, 300, 400]
+    kmaxs = [10, 15, 20, 25, 30]
 elif mode == 'train_init_steps':
     num_initials = 20
     initial_seeds = [300 + i for i in range(num_initials)]
+    modes = [100] * num_initials
+    kmaxs = [15] * num_initials
 
 # 结果数组
 # FEM 输出形状: (num_initials, steps, 1, ny, nx)
@@ -107,7 +117,7 @@ for i, seed in enumerate(initial_seeds):
     print(f"正在计算样本 {i+1}/{num_initials}, 种子: {seed}")
     
     # 1. 初始化 c
-    init_gen = InitialConditions(seed, lx, ly, nx, ny)
+    init_gen = InitialConditions(seed, lx, ly, nx, ny, modes=modes[i], kmax=kmaxs[i])
     c = init_gen.generate()
     
     # 保存初始状态 (t=0)

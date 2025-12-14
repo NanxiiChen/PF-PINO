@@ -21,7 +21,7 @@ class AutoRegressiveModel2d(eqx.Module):
         
         def scan_fn(u, _):
             inputs = jnp.concatenate([u, k_channel, meshes], 
-                                     axis=0)  # [C+4, Sx, Sy]
+                                     axis=0)  # [C+3, Sx, Sy]
             u_next = self.forward(inputs)  # [C, Sx, Sy]
             return u_next, u_next
 

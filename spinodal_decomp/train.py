@@ -111,7 +111,8 @@ def main():
     )
 
     losses = Losses()
-    loss_fn = losses.pi_loss if configs.physical_residual else losses.mse_loss
+    physical_residual = configs.physical_residual
+    loss_fn = losses.pi_loss if physical_residual else losses.mse_loss
 
     scheduler = optax.exponential_decay(
         init_value=configs.learning_rate,
@@ -145,7 +146,7 @@ def main():
         val_loss_epoch = 0.0
         ch_loss_epoch = 0.0
         for train_batch_x, train_batch_y in train_loader:
-            if configs.physical_residual:
+            if physical_residual:
                 model, opt_state, weighted_loss, loss_components, weight_components, aux_vars = train_step_pi(
                     model, loss_fn,
                     opt_state, optimizer, 
@@ -168,7 +169,7 @@ def main():
         # So the actual number of samples used is (num_batches * batch_size)
         train_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
         train_loss_history.append(train_loss_epoch)
-        if configs.physical_residual:
+        if physical_residual:
             ch_loss_epoch /= (train_x_full.shape[0] // batch_size * batch_size)
         
         for val_batch_x, val_batch_y in valid_loader:
