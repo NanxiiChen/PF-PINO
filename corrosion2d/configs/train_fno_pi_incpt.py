@@ -31,11 +31,11 @@ class Configs:
     test_every = 500
     physical_residual = True
 
-    save_dir = f"./corrosion2d/runs/FNO-PI-INCPT/"
+    save_dir = "/root/autodl-tmp/runs/corrosion2d/FNO-PI-INCPT/"
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
-    data_dir = "./corrosion2d/data/train_valid/"
-    test_data_dir = "./corrosion2d/data/test/"
+    data_dir = "/root/autodl-tmp/data/corrosion2d/train_valid/"
+    test_data_dir = "/root/autodl-tmp/data/corrosion2d/test/"
 
     Lc = 1e-4 # xc = x / Lc
     Tc = 100.0 # tc = t / Tc

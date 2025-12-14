@@ -29,11 +29,11 @@ class Configs:
     test_every = 200
     physical_residual = False
 
-    save_dir = f"./solidification/runs/FNO/"
+    save_dir = f"/root/autodl-tmp/runs/solidification/FNO/"
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
-    data_dir = "./solidification/data/train_valid/"
-    test_data_dir = "./solidification/data/test/"
+    data_dir = "/root/autodl-tmp/data/solidification/train_valid/"
+    test_data_dir = "/root/autodl-tmp/data/solidification/test/"
 
     Lc = 1.0 # xc = x / Lc
     Tc = 1.0 # tc = t / Tc

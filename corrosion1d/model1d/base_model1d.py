@@ -1,4 +1,5 @@
 import equinox as eqx
+import jax
 import jax.numpy as jnp
 
 class AutoRegressiveModel1d(eqx.Module):
@@ -14,18 +15,20 @@ class AutoRegressiveModel1d(eqx.Module):
     def auto_reg(self, u0, Lp, meshes, dt, steps):
         # meshes: [S,]
         meshes = meshes[None, :]  # [1, S]
-        preds = []
-        u = u0 # vmap outside the function, so u0 shape is [C, S] without B
-        for step in range(steps):
-            t_channel = jnp.full_like(meshes, dt)
-            Lp_channel = jnp.full_like(meshes, Lp)
+        
+        t_channel = jnp.full_like(meshes, dt)
+        Lp_channel = jnp.full_like(meshes, Lp)
+        
+        def scan_fn(u, _):
             inputs = jnp.concatenate([u, Lp_channel, 
                                       meshes, t_channel], 
-                                     axis=0)  # [C+2, S]
-            u = self.forward(inputs)  # [C, S]
-            preds.append(u)
-        return jnp.stack(preds, axis=0)  # [T, C, S]
-            
+                                     axis=0)
+            u_next = self.forward(inputs)  # [C, S]
+            return u_next, u_next
 
-    
-    
+        _, preds = jax.lax.scan(scan_fn, u0, None, length=steps)
+        return preds  # [T, C, S]
+
+
+
+

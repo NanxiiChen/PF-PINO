@@ -3,7 +3,7 @@ import jax.numpy as jnp
 
 @dataclass(frozen=True)
 class Configs:
-    DEBUG_MODE = True
+    DEBUG_MODE = False
     
     # Model architecture settings
     model_type = "FNO"  # Options: 'fno', 'fcn', 'unet'
@@ -28,13 +28,13 @@ class Configs:
     test_every = 500
     physical_residual = True
     
-    save_dir = f"./corrosion1d/runs/{model_type.upper()}-PI/" \
-        if physical_residual else f"./corrosion1d/runs/{model_type.upper()}/"
+    save_dir = f"/root/autodl-tmp/runs/corrosion1d/{model_type.upper()}-PI/" \
+        if physical_residual else f"/root/autodl-tmp/runs/corrosion1d/{model_type.upper()}/"
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
-    data_dir = "./corrosion1d/data/train_valid/"
-    test_data_dir = "./corrosion1d/data/test/"
-    
+    data_dir = "/root/autodl-tmp/data/corrosion1d/train_valid/"
+    test_data_dir = "/root/autodl-tmp/data/corrosion1d/test/"
+
     Lc = 1e-4 # xc = x / Lc
     Tc = 1.0 # tc = t / Tc
     # Lpc = lambda lp: -jnp.log10(lp) - 5  # lpc = -log10(lp) - 5
