@@ -49,9 +49,10 @@ class Losses:
             dt_unit = dt * configs.Tc
 
             # (c - c0)/dt = M * laplacian(f'(c0)) - M * lambda * bi-laplacian(c)
+            # c - c0 = M * laplacian(f'(c0)) * dt - M * lambda * bi-laplacian(c) * dt
             c0_hat = jnp.fft.fft2(c0)
             c_hat = jnp.fft.fft2(c)
-            lhs_hat = (c_hat - c0_hat) / dt_unit
+            lhs_hat = c_hat - c0_hat
 
             M = configs.M
             lambda_param = configs.lambda_param
@@ -59,10 +60,10 @@ class Losses:
             f_prime_hat = jnp.fft.fft2(f_prime)
 
             # M * laplacian(f'(c0)) -> M * (-K2) * f_prime_hat
-            term1_hat = -M * K2 * f_prime_hat
+            term1_hat = -M * K2 * f_prime_hat * dt_unit
 
             # - M * lambda * bi-laplacian(c) -> - M * lambda * (K4) * c_hat
-            term2_hat = -M * lambda_param * K4 * c_hat
+            term2_hat = -M * lambda_param * K4 * c_hat * dt_unit
             rhs_hat = term1_hat + term2_hat
             residual_hat = lhs_hat - rhs_hat
             residual = jnp.fft.ifft2(residual_hat).real

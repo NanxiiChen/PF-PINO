@@ -19,10 +19,10 @@ class Configs:
     down_scale = 1
 
 
-    learning_rate = 1e-3
-    decay_every = 100
+    learning_rate = 5e-4
+    decay_every = 200
     decay_rate = 0.95
-    end_value = 1e-4
+    end_value = 5e-5
     
 
     batch_size = 64
@@ -40,7 +40,7 @@ class Configs:
     Lc = 1.0 # xc = x / Lc
     Tc = 1e-4 # tc = t / Tc
 
-    CH_PRE_SCALE = 1e4
+    CH_PRE_SCALE = 1e0
     POT_PRE_SCALE = 1e0
 
     M = 1.0            # 迁移率
