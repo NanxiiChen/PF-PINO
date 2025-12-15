@@ -97,8 +97,8 @@ elif mode == 'test':
     initial_seeds = [200 + i for i in range(num_initials)]
     # modes = [100] * num_initials
     # kmaxs = [15] * num_initials
-    modes = [50, 100, 200, 300, 400]
-    kmaxs = [10, 15, 20, 25, 30]
+    modes = [100] * num_initials
+    kmaxs = [15] * num_initials
 elif mode == 'train_init_steps':
     num_initials = 20
     initial_seeds = [300 + i for i in range(num_initials)]

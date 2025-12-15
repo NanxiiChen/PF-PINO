@@ -76,6 +76,56 @@ class Losses:
                       "dx_phys": dx_phys, 
                       "dy_phys": dy_phys, 
                       "dt_phys": dt * configs.Tc}
+
+
+    @classmethod
+    def ch_loss_real(cls,
+                model: AutoRegressiveModel2d,
+                xs: jnp.ndarray,
+                dx: float,
+                dy: float,
+                dt: float,
+                configs: Configs,
+                **kwargs) -> jnp.ndarray:
+        
+        """
+        Compute the Cahn-Hilliard residual in real space.
+        """
+
+        def laplacian_fd(u, dx, dy):
+            u_ip = jnp.roll(u, -1, axis=-1)
+            u_im = jnp.roll(u, 1, axis=-1)
+            u_jp = jnp.roll(u, -1, axis=-2)
+            u_jm = jnp.roll(u, 1, axis=-2)
+            
+            d2x = (u_ip + u_im - 2*u) / (dx**2)
+            d2y = (u_jp + u_jm - 2*u) / (dy**2)
+            return d2x + d2y
+
+
+        def residual_fn(x, dx, dy, dt):
+            pred = model.forward(x)
+
+            c0 = x[0, :, :]
+            c = pred[0, :, :]
+
+            dt_phys = dt * configs.Tc
+            dx_phys = dx * configs.Lc
+            dy_phys = dy * configs.Lc
+            M = configs.M
+            lambda_param = configs.lambda_param
+
+            f_prime = c0**3 - c0 # semi-implicit treatment of f'
+            lap_c = laplacian_fd(c, dx_phys, dy_phys)
+            mu = f_prime - lambda_param * lap_c
+            rhs = M * laplacian_fd(mu, dx_phys, dy_phys) * dt_phys
+            lhs = c - c0
+            residual = lhs - rhs
+            return residual / 0.1
+        
+        residuals = vmap(residual_fn, in_axes=(0, None, None, None))(xs, dx, dy, dt)
+        loss = jnp.mean(jnp.square(residuals))
+        return loss, {}
     
     @classmethod
     @eqx.filter_jit
@@ -104,6 +154,7 @@ class Losses:
             aux_vars.update(aux_var)
 
         weights = cls.grad_norm_weights(grads)
+        # weights = jnp.array([1.0 for _ in losses])
         total_loss = jnp.sum(jnp.array(weights) * jnp.array(losses))
 
         def sum_weighted_grads(weight, grad_tree):
@@ -124,8 +175,8 @@ class Losses:
 
         grad_norms = jnp.array([tree_norm(g) for g in grads])
         grad_norms = jnp.clip(grad_norms, eps, 1 / eps)
-        weights = grad_norms[0] / (grad_norms + eps)
-        # weights = jnp.sum(grad_norms) / (grad_norms + eps)
+        # weights = grad_norms[0] / (grad_norms + eps)
+        weights = jnp.sum(grad_norms) / (grad_norms + eps)
         weights = jnp.nan_to_num(weights)
         weights = jnp.clip(weights, eps, 1 / eps)
         return jax.lax.stop_gradient(weights)

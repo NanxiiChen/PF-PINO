@@ -14,7 +14,7 @@ class Configs:
     modes_x = 32
     modes_y = 32
     width = 64
-    depth = 4
+    depth = 3
     activation = "gelu"
     down_scale = 1
 
