@@ -25,11 +25,11 @@ mode = args.mode
 
 # save_dir = './spinodal_decomp/data/train_valid' if mode == 'train_valid' else './spinodal_decomp/data/test'
 if mode == 'train_valid':
-    save_dir = './spinodal_decomp/data/train_valid'
+    save_dir = '/root/autodl-tmp/data/spinodal_decomp_spectra/train_valid'
 elif mode == 'test':
-    save_dir = './spinodal_decomp/data/test'
+    save_dir = '/root/autodl-tmp/data/spinodal_decomp_spectra/test'
 elif mode == 'train_init_steps':
-    save_dir = './spinodal_decomp/data/train_init_steps'
+    save_dir = '/root/autodl-tmp/data/spinodal_decomp_spectra/train_init_steps'
 
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
@@ -123,9 +123,9 @@ class InitialConditions(UserExpression):
         np.random.seed(seed)
         
         # --- 噪声配置 ---
-        self.num_modes = 50      # 叠加 200 个波，足够产生“乱”的感觉
-        self.k_max = 8           # 最大波数设为 20 (对应波长 0.05，接近界面厚度)
-        self.noise_amp = 0.1     # 噪声总强度
+        self.num_modes = 100      # 叠加 200 个波，足够产生“乱”的感觉
+        self.k_max = 15           # 最大波数设为 20 (对应波长 0.05，接近界面厚度)
+        self.noise_amp = 0.02     # 噪声总强度
         
         # --- 预先生成并固定随机系数 ---
         # 随机选择波数 kx, ky 在 [-20, 20] 之间
