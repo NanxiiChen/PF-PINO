@@ -128,6 +128,20 @@ class Losses:
         return loss, {}
     
     @classmethod
+    def mass_conservation_loss(cls,
+                               model: AutoRegressiveModel2d,
+                               xs: jnp.ndarray,
+                               ys: jnp.ndarray,
+                               dx: float,
+                               dy: float,
+                               **kwargs) -> jnp.ndarray:
+        y_pred = vmap(model.forward)(xs)
+        mass_pred = jnp.mean(y_pred, axis=(-2, -1))
+        mass_true = jnp.mean(ys, axis=(-2, -1))
+        loss = jnp.mean(jnp.square(mass_pred - mass_true)) * 100.0  # scale to match other losses
+        return loss, {}
+    
+    @classmethod
     @eqx.filter_jit
     def pi_loss(cls,
                 model: AutoRegressiveModel2d,
@@ -182,5 +196,5 @@ class Losses:
         return jax.lax.stop_gradient(weights)
         
 MSE_VG = eqx.filter_value_and_grad(Losses.mse_loss, has_aux=True)
-CH_VG  = eqx.filter_value_and_grad(Losses.ch_loss, has_aux=True)
+CH_VG  = eqx.filter_value_and_grad(Losses.mass_conservation_loss, has_aux=True)
 VG_FNS = [MSE_VG, CH_VG,]
