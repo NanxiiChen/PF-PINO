@@ -5,7 +5,7 @@ import os
 import argparse
 
 # 设置并行线程数（可选）
-os.environ['OMP_NUM_THREADS'] = '16'
+os.environ['OMP_NUM_THREADS'] = '20'
 
 print(f"Current OMP_NUM_THREADS: {os.environ.get('OMP_NUM_THREADS')}")
 
@@ -21,11 +21,11 @@ args = parser.parse_args()
 mode = args.mode
 
 if mode == 'train_valid':
-    K_values = [0.6, 0.8, 1.0, 1.2, 1.4]
-    save_dir = './solidification/data/train_valid'
+    K_values = [0.8, 1.0, 1.2, 1.4,]
+    save_dir = "/root/autodl-tmp/data/solidification_1216/train_valid/"
 elif mode == 'test':
-    K_values = [0.7, 0.9, 1.1, 1.3, 1.5]
-    save_dir = './solidification/data/test'
+    K_values = [0.9, 1.1, 1.3, 1.5, 1.7,]
+    save_dir = "/root/autodl-tmp/data/solidification_1216/test/"
 else:
     raise ValueError("Invalid mode")
 

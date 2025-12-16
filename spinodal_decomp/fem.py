@@ -11,7 +11,7 @@ import numpy as np
 import os
 import os
 
-os.environ['OMP_NUM_THREADS'] = '16'
+os.environ['OMP_NUM_THREADS'] = '20'
 print(f"Current OMP_NUM_THREADS: {os.environ.get('OMP_NUM_THREADS')}")
 
 # 设置模式和保存路径
@@ -25,11 +25,11 @@ mode = args.mode
 
 # save_dir = './spinodal_decomp/data/train_valid' if mode == 'train_valid' else './spinodal_decomp/data/test'
 if mode == 'train_valid':
-    save_dir = '/root/autodl-tmp/data/spinodal_decomp_spectra/train_valid'
+    save_dir = '/root/autodl-tmp/data/spinodal_decomp_fem/train_valid'
 elif mode == 'test':
-    save_dir = '/root/autodl-tmp/data/spinodal_decomp_spectra/test'
+    save_dir = '/root/autodl-tmp/data/spinodal_decomp_fem/test'
 elif mode == 'train_init_steps':
-    save_dir = '/root/autodl-tmp/data/spinodal_decomp_spectra/train_init_steps'
+    save_dir = '/root/autodl-tmp/data/spinodal_decomp_fem/train_init_steps'
 
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)

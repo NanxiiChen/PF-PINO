@@ -29,7 +29,7 @@ class Configs:
     test_every = 200
     physical_residual = True
 
-    save_dir = f"/root/autodl-tmp/runs/solidification/FNO/"
+    save_dir = f"/root/autodl-tmp/runs/solidification/FNO-PI/"
     if DEBUG_MODE:
         save_dir = save_dir[:-1] + "_DEBUG/"
     data_dir = "/root/autodl-tmp/data/solidification/train_valid/"
