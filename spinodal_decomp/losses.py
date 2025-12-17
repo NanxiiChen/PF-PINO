@@ -125,13 +125,21 @@ class Losses:
             M = configs.M
             lambda_param = configs.lambda_param
 
-            f_prime = c0**3 - c0 # semi-implicit treatment of f'
-            lap_c = laplacian_fd(c, dx_phys, dy_phys)
-            mu = f_prime - lambda_param * lap_c
-            rhs = M * laplacian_fd(mu, dx_phys, dy_phys) * dt_phys
+            def compute_rhs_term(u):
+                f_prime = u**3 - u
+                lap_u = laplacian_fd(u, dx_phys, dy_phys)
+                mu = f_prime - lambda_param * lap_u
+                return M * laplacian_fd(mu, dx_phys, dy_phys)
+
+            # Crank-Nicolson Scheme: (c - c0)/dt = 0.5 * (RHS(c) + RHS(c0))
+            rhs_c = compute_rhs_term(c)
+            rhs_c0 = compute_rhs_term(c0)
+            
+            # Combine terms: c - c0 - 0.5 * dt * (RHS(c) + RHS(c0))
+            rhs_avg = 0.5 * (rhs_c + rhs_c0) * dt_phys
             lhs = c - c0
-            residual = lhs - rhs
-            return residual / 0.1
+            residual = lhs - rhs_avg
+            return residual
         
         residuals = vmap(residual_fn, in_axes=(0, None, None, None))(xs, dx, dy, dt)
         loss = jnp.mean(jnp.square(residuals))
@@ -206,5 +214,5 @@ class Losses:
         return jax.lax.stop_gradient(weights)
         
 MSE_VG = eqx.filter_value_and_grad(Losses.mse_loss, has_aux=True)
-CH_VG  = eqx.filter_value_and_grad(Losses.ch_loss, has_aux=True)
+CH_VG  = eqx.filter_value_and_grad(Losses.ch_loss_real, has_aux=True)
 VG_FNS = [MSE_VG, CH_VG,]
