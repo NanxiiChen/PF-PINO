@@ -48,22 +48,32 @@ class Losses:
             # use spectral type governing equations
             dt_unit = dt * configs.Tc
 
-            # (c - c0)/dt = M * laplacian(f'(c0)) - M * lambda * bi-laplacian(c)
-            # c - c0 = M * laplacian(f'(c0)) * dt - M * lambda * bi-laplacian(c) * dt
+            # Crank-Nicolson Scheme (Fully Implicit in Loss)
+            # (c - c0)/dt = 0.5 * (RHS(c) + RHS(c0))
+            # RHS(u) = M * laplacian(f'(u)) - M * lambda * bi-laplacian(u)
+            
             c0_hat = jnp.fft.fft2(c0)
             c_hat = jnp.fft.fft2(c)
             lhs_hat = c_hat - c0_hat
 
             M = configs.M
             lambda_param = configs.lambda_param
-            f_prime = c0**3 - c0 # semi-implicit treatment of f'
-            f_prime_hat = jnp.fft.fft2(f_prime)
+            
+            # Calculate nonlinear terms f'(c) = c^3 - c for both time steps
+            f_prime_c = c**3 - c
+            f_prime_c0 = c0**3 - c0
+            
+            f_prime_c_hat = jnp.fft.fft2(f_prime_c)
+            f_prime_c0_hat = jnp.fft.fft2(f_prime_c0)
 
-            # M * laplacian(f'(c0)) -> M * (-K2) * f_prime_hat
-            term1_hat = -M * K2 * f_prime_hat * dt_unit
+            # Spectral derivatives: laplacian -> -K2, bi-laplacian -> K4
+            
+            # Term 1: M * laplacian(f'(c) + f'(c0)) * 0.5 * dt
+            term1_hat = -0.5 * M * K2 * (f_prime_c_hat + f_prime_c0_hat) * dt_unit
 
-            # - M * lambda * bi-laplacian(c) -> - M * lambda * (K4) * c_hat
-            term2_hat = -M * lambda_param * K4 * c_hat * dt_unit
+            # Term 2: - M * lambda * bi-laplacian(c + c0) * 0.5 * dt
+            term2_hat = -0.5 * M * lambda_param * K4 * (c_hat + c0_hat) * dt_unit
+            
             rhs_hat = term1_hat + term2_hat
             residual_hat = lhs_hat - rhs_hat
             residual = jnp.fft.ifft2(residual_hat).real
@@ -196,5 +206,5 @@ class Losses:
         return jax.lax.stop_gradient(weights)
         
 MSE_VG = eqx.filter_value_and_grad(Losses.mse_loss, has_aux=True)
-CH_VG  = eqx.filter_value_and_grad(Losses.mass_conservation_loss, has_aux=True)
+CH_VG  = eqx.filter_value_and_grad(Losses.ch_loss, has_aux=True)
 VG_FNS = [MSE_VG, CH_VG,]

@@ -32,7 +32,7 @@ if not os.path.exists(save_dir):
 # 设置参数 (与 FEM 保持一致)
 lx, ly = 1.0, 1.0
 nx, ny = 64, 64
-dt = 5.0e-5
+dt = 5e-5
 T = 5e-3
 if mode == 'train_init_steps':
     T = dt * 10
@@ -117,7 +117,7 @@ for i, seed in enumerate(initial_seeds):
     print(f"正在计算样本 {i+1}/{num_initials}, 种子: {seed}")
     
     # 1. 初始化 c
-    init_gen = InitialConditions(seed, lx, ly, nx, ny, modes=modes[i], kmax=kmaxs[i])
+    init_gen = InitialConditions(seed, lx, ly, nx, ny, modes=modes[i], kmax=kmaxs[i], amp=0.01)
     c = init_gen.generate()
     
     # 保存初始状态 (t=0)
@@ -127,24 +127,49 @@ for i, seed in enumerate(initial_seeds):
     # 时间演化
     c_curr = c.copy()
     
-    # 预计算系数 (Semi-implicit scheme)
-    denom = 1.0 + dt * M * lambda_param * K4
+    # 预计算系数 (Crank-Nicolson Fully Implicit Scheme)
+    # 离散格式: (c_new - c_old)/dt = -M*K2 * 0.5*(f'(c_new) + f'(c_old)) - M*lambda*K4 * 0.5*(c_new + c_old)
+    # 整理得: c_new * (1 + 0.5*dt*M*lambda*K4) = c_old * (1 - 0.5*dt*M*lambda*K4) - 0.5*dt*M*K2 * (f'(c_new) + f'(c_old))
+    
+    lhs_coef = 1.0 + 0.5 * dt * M * lambda_param * K4
+    rhs_linear_coef = 1.0 - 0.5 * dt * M * lambda_param * K4
+    nonlinear_factor = 0.5 * dt * M * K2
     
     for step in range(num_steps):
-        c_hat = np.fft.fft2(c_curr)
+        c_hat_old = np.fft.fft2(c_curr)
         
-        # 计算非线性项 f'(c) = c^3 - c
-        f_prime = c_curr**3 - c_curr
-        f_prime_hat = np.fft.fft2(f_prime)
+        # 计算旧时刻的非线性项 f'(c_old) = c_old^3 - c_old
+        f_prime_old = c_curr**3 - c_curr
+        f_prime_hat_old = np.fft.fft2(f_prime_old)
         
-        # Semi-implicit scheme:
-        # (c_new - c_old)/dt = -M * K^2 * ( f_prime_hat + lambda * K^2 * c_new )
-        # c_new * (1 + dt * M * lambda * K4) = c_old - dt * M * K^2 * f_prime_hat
+        # RHS 中已知的部分 (Linear part + Explicit nonlinear part)
+        rhs_known = rhs_linear_coef * c_hat_old - nonlinear_factor * f_prime_hat_old
         
-        numerator = c_hat - dt * M * K2 * f_prime_hat
-        c_new_hat = numerator / denom
+        # Picard 迭代求解隐式非线性项
+        # 初始猜测 c_new = c_old
+        c_new = c_curr.copy()
+        c_hat_new = c_hat_old.copy()
         
-        c_new = np.fft.ifft2(c_new_hat).real
+        max_iter = 100
+        tol = 1e-9
+        
+        for k in range(max_iter):
+            # 计算当前猜测的 f'(c_new)
+            f_prime_new = c_new**3 - c_new
+            f_prime_hat_new = np.fft.fft2(f_prime_new)
+            
+            # 更新 c_new_hat
+            # lhs_coef * c_new_hat = rhs_known - nonlinear_factor * f_prime_hat_new
+            c_hat_new_updated = (rhs_known - nonlinear_factor * f_prime_hat_new) / lhs_coef
+            
+            # 检查收敛性 (相对误差)
+            diff = np.linalg.norm(c_hat_new_updated - c_hat_new) / (np.linalg.norm(c_hat_new) + 1e-12)
+            
+            c_hat_new = c_hat_new_updated
+            c_new = np.fft.ifft2(c_hat_new).real
+            
+            if diff < tol:
+                break
         
         # 更新 c
         c_curr = c_new
