@@ -185,8 +185,9 @@ class Losses:
             grads.append(grad)
             aux_vars.update(aux_var)
 
-        weights = cls.grad_norm_weights(grads)
-        # weights = jnp.array([1.0 for _ in losses])
+        # weights = cls.grad_norm_weights(grads)
+        weights = jnp.array([1.0 for _ in losses])
+        # weights = jnp.array([0.0, 1.0]) # try only CH loss
         total_loss = jnp.sum(jnp.array(weights) * jnp.array(losses))
 
         def sum_weighted_grads(weight, grad_tree):
@@ -214,5 +215,5 @@ class Losses:
         return jax.lax.stop_gradient(weights)
         
 MSE_VG = eqx.filter_value_and_grad(Losses.mse_loss, has_aux=True)
-CH_VG  = eqx.filter_value_and_grad(Losses.ch_loss_real, has_aux=True)
+CH_VG  = eqx.filter_value_and_grad(Losses.ch_loss, has_aux=True)
 VG_FNS = [MSE_VG, CH_VG,]
