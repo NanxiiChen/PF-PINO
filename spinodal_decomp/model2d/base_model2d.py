@@ -12,12 +12,13 @@ class AutoRegressiveModel2d(eqx.Module):
         return self.__call__(x, **kwargs)
     
     @eqx.filter_jit
-    def auto_reg(self, u0, meshes, steps):
+    def auto_reg(self, u0, m, meshes, steps):
         # meshes: [2, Sx, Sy]
         # u0: [C, Sx, Sy]
+        m_channel = jnp.full((1, meshes.shape[1], meshes.shape[2]), m)
         def scan_fn(carry, _):
             u_prev = carry
-            inputs = jnp.concatenate([u_prev, meshes], axis=0)
+            inputs = jnp.concatenate([u_prev, m_channel, meshes], axis=0)
             u_next = self.forward(inputs)
             return u_next, u_next
 

@@ -9,12 +9,12 @@ class Configs:
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
     inception = True  # Use inception-style bypass blocks if True
 
-    in_channels = 3 # c, meshx, meshy
+    in_channels = 4
     out_channels = 1 # c
     modes_x = 32
     modes_y = 32
     width = 64
-    depth = 4
+    depth = 3
     activation = "gelu"
     down_scale = 1
 

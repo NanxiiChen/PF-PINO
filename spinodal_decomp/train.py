@@ -86,6 +86,7 @@ def main():
     test_meshes = jnp.load(os.path.join(configs.test_data_dir, "mesh_grid_coords.npy"))
     test_meshes = jnp.transpose(test_meshes, (2, 0, 1))  # (samples, 2, nx, ny)
     test_times = jnp.load(os.path.join(configs.test_data_dir, "times.npy"))
+    test_ms = jnp.load(os.path.join(configs.test_data_dir, "M_values.npy"))
     print(f"Test Dataset shape: solutions {test_solutions.shape}, meshes {test_meshes.shape},")
     test_times = test_times / configs.Tc
     test_meshes = test_meshes / configs.Lc
@@ -156,7 +157,7 @@ def main():
                     pde_name=pde_name,
                 )
                 train_loss_epoch += loss_components[0].item() * train_batch_x.shape[0]
-                ch_loss_epoch += loss_components[1].item() * train_batch_x.shape[0]
+                ch_loss_epoch += loss_components[-1].item() * train_batch_x.shape[0]
 
             else:
                 model, opt_state, loss = train_step(
@@ -198,7 +199,7 @@ def main():
                 meshes=test_meshes,
                 steps=steps,
             )
-            y_test_pred = jax.vmap(auto_reg_fn, in_axes=(0))(x_test)
+            y_test_pred = jax.vmap(auto_reg_fn, in_axes=(0, 0))(x_test, test_ms)
             test_mse = jnp.mean((y_test_pred - y_test) ** 2)
             print(f"Test MSE at epoch {epoch}: {test_mse:.3e}")
             with open(os.path.join(savedir, "test_logs.csv"), "a") as f:

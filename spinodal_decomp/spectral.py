@@ -39,7 +39,7 @@ if mode == 'train_init_steps':
 num_steps = int(T / dt)
 
 # Cahn-Hilliard 参数
-M = 1.0
+# M = 1.0
 epsilon = 0.01
 lambda_param = epsilon**2
 
@@ -91,6 +91,10 @@ if mode == 'train_valid':
     initial_seeds = [100 + i for i in range(num_initials)]
     modes = [100] * num_initials
     kmaxs = [15] * num_initials
+    np.random.seed(100)
+    Ms = np.random.uniform(0.5, 1.5, num_initials)
+    np.save(os.path.join(save_dir, 'M_values.npy'), Ms)
+
 
 elif mode == 'test':
     num_initials = 5
@@ -99,6 +103,8 @@ elif mode == 'test':
     # kmaxs = [15] * num_initials
     modes = [100] * num_initials
     kmaxs = [15] * num_initials
+    Ms = [0.6, 0.8, 1.0, 1.2, 1.4]
+    np.save(os.path.join(save_dir, 'M_values.npy'), np.array(Ms))
 elif mode == 'train_init_steps':
     num_initials = 20
     initial_seeds = [300 + i for i in range(num_initials)]
@@ -115,6 +121,7 @@ print(f"开始批量模拟 (Spectral)... 模式: {mode}, 样本数: {num_initial
 
 for i, seed in enumerate(initial_seeds):
     print(f"正在计算样本 {i+1}/{num_initials}, 种子: {seed}")
+    M = Ms[i]
     
     # 1. 初始化 c
     init_gen = InitialConditions(seed, lx, ly, nx, ny, modes=modes[i], kmax=kmaxs[i], amp=0.01)
@@ -184,6 +191,7 @@ for i, seed in enumerate(initial_seeds):
 np.save(os.path.join(save_dir, 'solutions_grid.npy'), results_grid)
 np.save(os.path.join(save_dir, 'initial_seeds.npy'), np.array(initial_seeds))
 np.save(os.path.join(save_dir, 'times.npy'), times)
+
 
 # 保存网格坐标 (与 FEM 格式一致)
 # endpoint=False, 对应 64 个点

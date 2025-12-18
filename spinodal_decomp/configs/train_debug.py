@@ -9,7 +9,7 @@ class Configs:
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
     inception = True  # Use inception-style bypass blocks if True
 
-    in_channels = 3 # c, meshx, meshy
+    in_channels = 4 # c, M, meshx, meshy
     out_channels = 1 # c
     modes_x = 32
     modes_y = 32
