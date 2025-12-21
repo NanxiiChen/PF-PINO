@@ -94,9 +94,9 @@ def main():
              valid_y=valid_y_full)
     print(f"Train Dataset shape: x {train_x_full.shape}, y {train_y_full.shape}")
     print(f"Valid Dataset shape: x {valid_x_full.shape}, y {valid_y_full.shape}")
-    test_solutions = jnp.load(os.path.join(configs.test_data_dir, "solutions_grid.npy"))[1:-1]
+    test_solutions = jnp.load(os.path.join(configs.test_data_dir, "solutions_grid.npy"))
     test_meshes = jnp.load(os.path.join(configs.test_data_dir, "mesh_grid_coords.npy"))
-    test_ks = jnp.load(os.path.join(configs.test_data_dir, "K_values.npy"))[1:-1]
+    test_ks = jnp.load(os.path.join(configs.test_data_dir, "K_values.npy"))
     test_meshes = jnp.transpose(test_meshes, (2, 0, 1))  # (samples, 2, nx, ny)
     test_times = jnp.load(os.path.join(configs.test_data_dir, "times.npy"))
     print(f"Test Dataset shape: solutions {test_solutions.shape}, meshes {test_meshes.shape}, ks {test_ks.shape}")
