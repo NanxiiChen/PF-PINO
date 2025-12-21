@@ -22,10 +22,10 @@ mode = args.mode
 
 if mode == 'train_valid':
     K_values = [0.8, 1.0, 1.2, 1.4, 1.6, ]
-    save_dir = "/root/autodl-tmp/data/solidification_1220/train_valid/"
+    save_dir = "./data/solidification_1220/train_valid/"
 elif mode == 'test':
     K_values = [0.9, 1.3, 1.7, 2.0]
-    save_dir = "/root/autodl-tmp/data/solidification_1220/test/"
+    save_dir = "./data/solidification_1220/test/"
 else:
     raise ValueError("Invalid mode")
 
