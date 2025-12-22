@@ -7,7 +7,8 @@ class Configs:
 
     # Model architecture settings
     model_type = "fno"  # Options: 'fno', 'fcn', 'unet'
-    inception = False  # Whether to use inception modules in the model
+    inception = False  # Use inception modules
+    padding = False # padding to handle non-periodic BCs
 
     in_channels = 5 # phi, c, meshx, meshy, dt
     out_channels = 2 # phi, c
@@ -16,7 +17,7 @@ class Configs:
     width = 64
     depth = 4
     activation = "relu"
-    down_scale = 1
+    down_scale = 1 # Down-sampling factor for input data
 
 
     learning_rate = 5e-4
