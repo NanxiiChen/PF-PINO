@@ -8,17 +8,22 @@ This repository implements a physics-informed neural operator (PINO) for predict
 
 ### Pencil-electrode corrosion
 
-<img src="assets/pencil_electrode_corrosion.png" alt="Pencil-electrode corrosion" width="600"/>
+<img src="assets/pencil_electrode_corrosion.png" alt="Pencil-electrode corrosion" width="800"/>
 
 ### Electro-polishing corrosion
 
-<img src="assets/electro_polishing_corrosion.png" alt="Electro-polishing corrosion" width="600"/>
+<img src="assets/electro_polishing_corrosion.png" alt="Electro-polishing corrosion" width="800"/>
 
 
 ### Dendritic growth
 
-<img src="assets/dendritic_crystal_solidification.png" alt="Dendritic growth" width="600"/>
+<img src="assets/dendritic_crystal_solidification.png" alt="Dendritic growth" width="800"/>
 
 ### Spinodal decomposition
 
-<img src="assets/spinodal_decomposition.png" alt="Spinodal decomposition" width="600"/>
+<img src="assets/spinodal_decomposition.png" alt="Spinodal decomposition" width="800"/>
+
+
+## Citations
+
+Paper coming soon.
