@@ -26,4 +26,14 @@ This repository implements a physics-informed neural operator (PINO) for predict
 
 ## Citations
 
-Paper coming soon.
+```bibtex
+@misc{chen2026physicsinformedneuraloperatorpredictive,
+      title={Physics-informed neural operator for predictive parametric phase-field modelling}, 
+      author={Nanxi Chen and Airong Chen and Rujin Ma},
+      year={2026},
+      eprint={2603.09693},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2603.09693}, 
+}
+```
